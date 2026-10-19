@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Không cho trang gọi mạng: lương không thể rời khỏi trình duyệt -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Quy ra giờ làm</title>
+  <meta name="description" content="Quy giá món đồ cậu muốn mua ra thời gian làm việc cần bỏ ra. Mọi thứ chỉ nằm trên máy cậu.">
+  <meta name="theme-color" content="#FBF4EA" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1A1511" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%23FDE6D8' stroke='%23D9531E' stroke-width='6'/%3E%3Cpath d='M32 18v14l10 6' fill='none' stroke='%23D9531E' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <svg class="clock" viewBox="0 0 48 48" aria-hidden="true">
+        <circle class="face" cx="24" cy="24" r="19" stroke-width="4"/>
+        <line class="hand hand-long" x1="24" y1="24" x2="24" y2="11" stroke-width="4" stroke-linecap="round"/>
+        <line class="hand hand-short" x1="24" y1="24" x2="31" y2="28" stroke-width="4" stroke-linecap="round"/>
+        <circle class="pin" cx="24" cy="24" r="2.5"/>
+      </svg>
+      <div>
+        <h1>Quy ra giờ làm</h1>
+        <p class="tagline">Món này tốn của cậu bao nhiêu thời gian làm việc?</p>
+      </div>
+    </header>
+
+    <form id="form" novalidate autocomplete="off">
+      <section class="card" aria-labelledby="income-title">
+        <h2 id="income-title"><span aria-hidden="true">💼</span> Thu nhập của cậu</h2>
+
+        <div class="field">
+          <div class="label-row">
+            <label for="salary">Lương thực nhận mỗi tháng</label>
+            <span class="preview" id="salary-preview" hidden></span>
+          </div>
+          <div class="money">
+            <input id="salary" name="salary" type="text" inputmode="text" enterkeyhint="next"
+                   placeholder="vd: 15tr, 15.000.000" aria-describedby="salary-note salary-preview salary-msg"
+                   spellcheck="false" autocapitalize="off">
+            <span class="suffix" aria-hidden="true">đ</span>
+          </div>
+          <p class="note" id="salary-note">Nhập lương thực nhận sau thuế và bảo hiểm, không phải lương gross.</p>
+          <p class="msg" id="salary-msg" role="alert" hidden></p>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="days">Ngày làm / tháng</label>
+            <input id="days" name="days" type="text" inputmode="decimal" enterkeyhint="next" value="22"
+                   aria-describedby="days-msg">
+            <p class="msg" id="days-msg" role="alert" hidden></p>
+          </div>
+          <div class="field">
+            <label for="hours">Giờ làm / ngày</label>
+            <input id="hours" name="hours" type="text" inputmode="decimal" enterkeyhint="next" value="8"
+                   aria-describedby="hours-msg">
+            <p class="msg" id="hours-msg" role="alert" hidden></p>
+          </div>
+        </div>
+
+        <div class="privacy">
+          <p id="storage-note">🔒 Chỉ lưu trên máy này để lần sau đỡ phải gõ lại. Không gửi đi đâu cả.</p>
+          <button type="button" id="clear" class="link-btn">Xoá dữ liệu đã lưu</button>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="item-title">
+        <h2 id="item-title"><span aria-hidden="true">🛍️</span> Món cậu muốn mua</h2>
+
+        <div class="chips" id="chips" role="group" aria-label="Gợi ý nhanh tên món">
+          <button type="button" class="chip" data-name="Ly cà phê"><span aria-hidden="true">☕</span> Cà phê</button>
+          <button type="button" class="chip" data-name="Ly trà sữa"><span aria-hidden="true">🧋</span> Trà sữa</button>
+          <button type="button" class="chip" data-name="Tô phở"><span aria-hidden="true">🍜</span> Tô phở</button>
+          <button type="button" class="chip" data-name="Lần đổ xăng"><span aria-hidden="true">⛽</span> Đổ xăng</button>
+          <button type="button" class="chip" data-name="Vé xem phim"><span aria-hidden="true">🎬</span> Xem phim</button>
+          <button type="button" class="chip" data-name="Bữa lẩu"><span aria-hidden="true">🍲</span> Bữa lẩu</button>
+          <button type="button" class="chip" data-name="Đôi giày mới"><span aria-hidden="true">👟</span> Giày mới</button>
+          <button type="button" class="chip" data-name="iPhone mới"><span aria-hidden="true">📱</span> iPhone</button>
+          <button type="button" class="chip" data-name="Chuyến du lịch"><span aria-hidden="true">✈️</span> Du lịch</button>
+          <button type="button" class="chip" data-name="Căn nhà"><span aria-hidden="true">🏠</span> Mua nhà</button>
+        </div>
+
+        <div class="field">
+          <label for="name">Tên món <span class="optional">(không bắt buộc)</span></label>
+          <input id="name" name="name" type="text" enterkeyhint="next" maxlength="60" placeholder="vd: Ly cà phê">
+        </div>
+
+        <div class="field">
+          <div class="label-row">
+            <label for="price">Giá món đồ</label>
+            <span class="preview" id="price-preview" hidden></span>
+          </div>
+          <div class="money">
+            <input id="price" name="price" type="text" inputmode="text" enterkeyhint="done"
+                   placeholder="vd: 45k, 1,2tr" aria-describedby="price-preview price-msg"
+                   spellcheck="false" autocapitalize="off">
+            <span class="suffix" aria-hidden="true">đ</span>
+          </div>
+          <p class="msg" id="price-msg" role="alert" hidden></p>
+        </div>
+      </section>
+    </form>
+
+    <section class="result" id="result" aria-labelledby="result-title">
+      <h2 id="result-title" class="sr-only">Kết quả</h2>
+      <p class="result-hint" id="result-hint" aria-live="polite"></p>
+      <div id="result-body" hidden>
+        <p class="result-label">Món này tốn của cậu</p>
+        <p class="big" id="big"></p>
+        <p class="detail" id="detail" hidden></p>
+        <p class="months" id="months" hidden></p>
+        <p class="sentence" id="sentence" aria-live="polite"></p>
+        <p class="quip" id="quip"></p>
+        <button type="button" class="share-btn" id="share" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Chia sẻ
+        </button>
+        <p class="share-note">Ảnh chỉ có tên món, giá và thời gian. Không có lương.</p>
+      </div>
+      <p class="rate" id="rate" hidden></p>
+    </section>
+
+    <footer class="foot">
+      Không máy chủ, không theo dõi, không cookie. Mọi phép tính chạy ngay trên máy cậu.
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
