@@ -12,7 +12,7 @@
   <meta name="theme-color" content="#171310" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%23FDE6D8' stroke='%23D9531E' stroke-width='6'/%3E%3Cpath d='M32 18v14l10 6' fill='none' stroke='%23D9531E' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
   <!-- Đổi ?v= mỗi lần sửa CSS/JS để trình duyệt không dùng bản cũ trong cache -->
-  <link rel="stylesheet" href="style.css?v=24">
+  <link rel="stylesheet" href="style.css?v=25">
   <script src="app.js?v=23" defer></script>
 </head>
 <body>
@@ -31,7 +31,7 @@
         </div>
       </div>
       <div class="tabs" role="tablist" aria-label="Công cụ">
-        <button type="button" role="tab" id="tab-overview" data-tab="overview" aria-controls="panel-overview" aria-selected="true">Tổng quan</button>
+        <button type="button" role="tab" id="tab-overview" data-tab="overview" aria-controls="panel-overview" aria-selected="true">Sức khoẻ</button>
         <button type="button" role="tab" id="tab-gross" data-tab="gross" aria-controls="panel-gross" aria-selected="false" tabindex="-1">Cầm về</button>
         <button type="button" role="tab" id="tab-time" data-tab="time" aria-controls="panel-time" aria-selected="false" tabindex="-1">Quy ra giờ</button>
         <button type="button" role="tab" id="tab-habit" data-tab="habit" aria-controls="panel-habit" aria-selected="false" tabindex="-1">Thói quen</button>
@@ -40,7 +40,7 @@
       </div>
     </header>
 
-    <!-- ============ Tổng quan tài chính ============ -->
+    <!-- ============ Sức khoẻ tài chính ============ -->
     <section id="panel-overview" class="panel" role="tabpanel" aria-labelledby="tab-overview">
       <div class="side side-input">
         <form class="group o-2" id="income-form" novalidate autocomplete="off">

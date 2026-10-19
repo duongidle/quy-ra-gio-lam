@@ -2,7 +2,7 @@
 
 Sáu tab trong một trang:
 
-- **Tổng quan**: sổ thu nhập (lương, thưởng, làm thêm…) theo ngày, xem tổng năm, trung bình tháng/ngày, biểu đồ 12 tháng,
+- **Sức khoẻ**: sổ thu nhập (lương, thưởng, làm thêm…) theo ngày, xem tổng năm, trung bình tháng/ngày, biểu đồ 12 tháng,
   so với cùng kỳ năm trước. Sổ nằm trên máy, hoặc trên Google Sheet của chính cậu nếu nối ở tab Dữ liệu.
 - **Cầm về**: gross → thực nhận (trừ BHXH 8%, BHYT 1,5%, BHTN 1%, thuế TNCN biểu 5 bậc theo Luật 109/2025/QH15,
   cộng phụ cấp miễn thuế), tính ngược net → gross để đi deal lương, và so sánh 2 offer theo lương thực nhận mỗi giờ.

@@ -768,7 +768,7 @@ dl.list dd.none { color: var(--muted); font-weight: 500; }
 .danger-btn:disabled { opacity: 0.4; cursor: default; }
 .danger-btn:focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
 
-/* Tổng quan: sổ thu nhập */
+/* Sức khoẻ: sổ thu nhập */
 .year-nav { display: flex; align-items: center; justify-content: center; gap: 6px; }
 .year-nav button {
   appearance: none;

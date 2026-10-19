@@ -7,21 +7,21 @@ Tài liệu cho Claude (và người) làm việc trên repo này. Đọc hết 
 
 Web tĩnh, giao diện tiếng Việt, cho người dùng biết **lương về tay bao nhiêu** và **một món đồ tốn mấy giờ làm**.
 Cảm giác cần đạt: nhìn con số là "à, hoá ra ly cà phê này tốn của mình 40 phút làm việc".
-Từ tháng 10/2026 app thành **app xem và quản lý tài chính cá nhân**: có sổ thu nhập và tab Tổng quan (bức tranh từ ngày tới năm).
+Từ tháng 10/2026 app thành **app xem và quản lý tài chính cá nhân**: có sổ thu nhập và tab Sức khoẻ (bức tranh từ ngày tới năm).
 Phần chi tiêu sẽ làm sau ("từ từ phát triển").
 
 Sáu tab:
 
 | Tab (nhãn)  | `data-tab` | Hash     | Làm gì |
 |-------------|-----------|----------|--------|
-| Tổng quan   | `overview`| (không)  | Ghi khoản thu (Lương/Thưởng/Làm thêm/Khác + ngày + ghi chú); tổng năm, TB tháng, mỗi ngày, biểu đồ 12 tháng, danh sách khoản trong tháng, so cùng kỳ năm trước |
+| Sức khoẻ    | `overview`| (không)  | Ghi khoản thu (Lương/Thưởng/Làm thêm/Khác + ngày + ghi chú); tổng năm, TB tháng, mỗi ngày, biểu đồ 12 tháng, danh sách khoản trong tháng, so cùng kỳ năm trước |
 | Cầm về      | `gross`   | `#cam-ve` | 3 chế độ: Gross → Net, Net → Gross (dò ngược để deal lương), So 2 offer (lương thực nhận mỗi giờ) |
 | Quy ra giờ  | `time`    | `#quy-ra-gio` | Giỏ một hoặc nhiều món → thời gian làm việc; cách mua: trả thẳng / trả góp 0% / để dành % lương; quy ra đồ đời thường; chia sẻ ảnh 3 mẫu |
 | Thói quen   | `habit`   | `#thoi-quen` | Món nhỏ lặp lại (x lần / ngày·tuần·tháng) → mỗi năm tốn bao nhiêu ngày công |
 | Đồng hồ     | `clock`   | `#dong-ho` | Tiền kiếm được hôm nay nhảy theo giây giữa giờ vào và giờ về; nút "Đang đi vệ sinh 🚽" |
 | Dữ liệu     | `data`    | `#du-lieu` | Liệt kê đúng những gì đang lưu trong localStorage, giải thích quyền riêng tư, nút xoá |
 
-Tab đầu (Tổng quan) để URL sạch (không `#`); lần đầu vào (chưa lưu gì) mở tab này. Hash tab **không được trùng `id` của ô nhập nào** (xem "Bẫy đã gặp").
+Tab đầu (Sức khoẻ) để URL sạch (không `#`); lần đầu vào (chưa lưu gì) mở tab này. Hash tab **không được trùng `id` của ô nhập nào** (xem "Bẫy đã gặp").
 Link cũ (`#net`, `#gross`, `#time`, `#habit`, `#clock`, `#data`) vẫn mở đúng tab qua `OLD_HASHES`.
 
 ## Ràng buộc cứng (không phá)
@@ -209,5 +209,5 @@ Người dùng đã đổi ý nhiều lần; trạng thái hiện tại là kế
 - Người dùng nói tiếng Việt, thích câu trả lời ngắn, thẳng, có giọng thân thiện.
 - Khi người dùng chê giao diện mà không rõ muốn gì, đưa 2–3 phương án có xem trước (preview) thay vì đoán rồi làm lại cả trang.
 - Sau mỗi thay đổi: push lên `main`, gửi zip mới cho Cloudflare, nói rõ cái gì đã kiểm tra và cái gì chưa chắc.
-- Hướng tiếp theo người dùng đã nói: phần **chi tiêu** cho tab Tổng quan (chưa làm). Khi làm: thêm trang tính riêng trên sheet,
+- Hướng tiếp theo người dùng đã nói: phần **chi tiêu** cho tab Sức khoẻ (chưa làm). Khi làm: thêm trang tính riêng trên sheet,
   thêm action trong `APPS_SCRIPT` mà không phá action cũ.
