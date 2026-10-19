@@ -248,6 +248,7 @@
     dependentsInvalid: 'Số người phụ thuộc phải là số nguyên từ 0 đến 20.',
     insuranceInvalid: 'Tớ chưa đọc được số này. Để trống nếu công ty đóng bảo hiểm theo đúng lương gross.',
     insuranceTooHigh: 'Lương đóng bảo hiểm thường không cao hơn lương gross. Xem lại giúp tớ nhé.',
+    hintGross: 'Nhập lương gross trên hợp đồng để xem thực nhận nhé.',
     hintGrossFix: 'Phần quy đổi từ gross đang có ô chưa ổn, xem lại giúp tớ nhé.'
   };
 
@@ -314,7 +315,9 @@
       deduction: deduction,
       taxable: taxable,
       tax: tax,
-      net: gross - insurance - tax
+      net: gross - insurance - tax,
+      socialCapped: base > socialCap,
+      unemploymentCapped: base > 20 * minimum
     };
   }
 
@@ -359,9 +362,8 @@
   }
 
   /**
-   * Toàn bộ trạng thái màn hình từ các chuỗi người dùng gõ.
-   * raw = { salary, days, hours, name, price } (đều là chuỗi), cộng thêm khi nhập gross:
-   * salaryMode = 'gross', dependents, insuranceBase, region.
+   * Trạng thái tab "Quy ra giờ làm" từ các chuỗi người dùng gõ.
+   * raw = { salary, days, hours, name, price } — salary là lương thực nhận.
    */
   function evaluate(raw) {
     var f = {
@@ -370,36 +372,15 @@
       hours: checkCount(raw.hours, 'hours'),
       price: checkMoney(raw.price, 'price')
     };
-    var isGross = raw.salaryMode === 'gross';
-    var out = { fields: f, mode: isGross ? 'gross' : 'net', gross: null, netSalary: null, hourlyRate: null, result: null, hint: null };
+    var out = { fields: f, hourlyRate: null, result: null, hint: null };
 
-    var grossOk = true;
-    if (isGross) {
-      f.dependents = checkDependents(raw.dependents);
-      f.insuranceBase = checkInsuranceBase(raw.insuranceBase, f.salary.state === 'ok' ? f.salary.value : null);
-      grossOk = f.dependents.state === 'ok' && f.insuranceBase.state === 'ok';
-      if (f.salary.state === 'ok' && grossOk) {
-        out.gross = grossToNet({
-          gross: f.salary.value,
-          dependents: f.dependents.value,
-          insuranceBase: f.insuranceBase.value,
-          region: Number(raw.region) || 1
-        });
-        out.netSalary = out.gross.net;
-      }
-    } else if (f.salary.state === 'ok') {
-      out.netSalary = f.salary.value;
-    }
-
-    var incomeOk = out.netSalary !== null && f.days.state === 'ok' && f.hours.state === 'ok';
+    var incomeOk = f.salary.state === 'ok' && f.days.state === 'ok' && f.hours.state === 'ok';
     if (incomeOk) {
-      out.hourlyRate = out.netSalary / (f.days.value * f.hours.value);
+      out.hourlyRate = f.salary.value / (f.days.value * f.hours.value);
     }
 
     if (f.salary.state !== 'ok') {
       out.hint = f.salary.state === 'empty' ? MSG.hintSalary : MSG.hintSalaryFix;
-    } else if (!grossOk) {
-      out.hint = MSG.hintGrossFix;
     } else if (!incomeOk) {
       out.hint = MSG.hintSchedule;
     } else if (f.price.state === 'empty') {
@@ -421,6 +402,31 @@
     return out;
   }
 
+  /**
+   * Trạng thái tab "Gross → Net".
+   * raw = { gross, dependents, insuranceBase, region } (chuỗi hoặc số).
+   */
+  function evaluateGross(raw) {
+    var f = { gross: checkMoney(raw.gross, 'salary') };
+    f.dependents = checkDependents(raw.dependents);
+    f.insuranceBase = checkInsuranceBase(raw.insuranceBase, f.gross.state === 'ok' ? f.gross.value : null);
+    var out = { fields: f, result: null, hint: null };
+
+    if (f.gross.state !== 'ok') {
+      out.hint = f.gross.state === 'empty' ? MSG.hintGross : MSG.hintSalaryFix;
+    } else if (f.dependents.state !== 'ok' || f.insuranceBase.state !== 'ok') {
+      out.hint = MSG.hintGrossFix;
+    } else {
+      out.result = grossToNet({
+        gross: f.gross.value,
+        dependents: f.dependents.value,
+        insuranceBase: f.insuranceBase.value,
+        region: Number(raw.region) || 1
+      });
+    }
+    return out;
+  }
+
   var Core = {
     DEFAULTS: DEFAULTS,
     MAX_MONEY: MAX_MONEY,
@@ -435,7 +441,8 @@
     GROSS_RULES: GROSS_RULES,
     progressiveTax: progressiveTax,
     grossToNet: grossToNet,
-    evaluate: evaluate
+    evaluate: evaluate,
+    evaluateGross: evaluateGross
   };
 
   if (typeof module === 'object' && module.exports) module.exports = Core;
@@ -450,38 +457,29 @@
   /* ===================== GIAO DIỆN ===================== */
 
   function initUI(core) {
-    var STORAGE_KEY = 'quy-ra-gio-lam:v1';
+    var STORAGE_KEY = 'quy-ra-gio-lam:v2';
+    var OLD_STORAGE_KEY = 'quy-ra-gio-lam:v1';
     var FONT = '"Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif';
 
     function $(id) { return document.getElementById(id); }
-    var inputs = {
-      salary: $('salary'), days: $('days'), hours: $('hours'), name: $('name'), price: $('price'),
-      dependents: $('dependents'), insuranceBase: $('insurance-base')
-    };
-    var msgs = {
-      salary: $('salary-msg'), days: $('days-msg'), hours: $('hours-msg'), price: $('price-msg'),
-      dependents: $('dependents-msg'), insuranceBase: $('insurance-base-msg')
-    };
-    var previews = { salary: $('salary-preview'), price: $('price-preview'), insuranceBase: $('insurance-base-preview') };
-    var SALARY_COPY = {
-      net: {
-        label: 'Lương thực nhận mỗi tháng',
-        note: 'Nhập lương thực nhận sau thuế và bảo hiểm, không phải lương gross.'
-      },
-      gross: {
-        label: 'Lương gross mỗi tháng',
-        note: 'Nhập lương gross trên hợp đồng, tớ sẽ trừ bảo hiểm và thuế để ra lương thực nhận.'
-      }
-    };
+    function $all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+
+    // Ô nhập của tab "Quy ra giờ làm"
+    var inputs = { salary: $('salary'), days: $('days'), hours: $('hours'), name: $('name'), price: $('price') };
+    var msgs = { salary: $('salary-msg'), days: $('days-msg'), hours: $('hours-msg'), price: $('price-msg') };
+    var previews = { salary: $('salary-preview'), price: $('price-preview') };
+
+    // Ô nhập của tab "Gross → Net"
+    var gInputs = { gross: $('gross'), insuranceBase: $('insurance-base') };
+    var gMsgs = { gross: $('gross-msg'), insuranceBase: $('insurance-base-msg') };
+    var gPreviews = { gross: $('gross-preview'), insuranceBase: $('insurance-base-preview') };
+    var gross = { dependents: 0, region: '1' };
+
     var el = {
-      modeRadios: document.querySelectorAll('input[name="mode"]'),
-      salaryLabel: $('salary-label'),
-      salaryNote: $('salary-note'),
-      grossFields: $('gross-fields'),
-      region: $('region'),
-      breakdown: $('breakdown'),
-      breakdownList: $('breakdown-list'),
-      form: $('form'),
+      tabs: $all('[role="tab"]'),
+      panels: { time: $('panel-time'), gross: $('panel-gross') },
+      sched: $('sched'),
+      schedSummary: $('sched-summary'),
       hint: $('result-hint'),
       body: $('result-body'),
       big: $('big'),
@@ -491,15 +489,30 @@
       quip: $('quip'),
       rate: $('rate'),
       share: $('share'),
+      chips: $('chips'),
+      depValue: $('dep-value'),
+      depMinus: $('dep-minus'),
+      depPlus: $('dep-plus'),
+      regions: $all('[data-region]'),
+      adv: $('adv'),
+      gHint: $('g-hint'),
+      gBody: $('g-body'),
+      gNet: $('g-net'),
+      gRatio: $('g-ratio'),
+      gBar: { net: $('bar-net'), ins: $('bar-ins'), tax: $('bar-tax') },
+      gLegend: $('g-legend'),
+      gLines: $('g-lines'),
+      useNet: $('use-net'),
       clear: $('clear'),
       storageNote: $('storage-note'),
-      toast: $('toast'),
-      chips: $('chips')
+      toast: $('toast')
     };
 
     var state = null;
+    var gState = null;
     var lastBig = '';
     var msgTimer = 0;
+    var gMsgTimer = 0;
     var toastTimer = 0;
 
     /* --- Lưu trữ cục bộ (luôn bọc try/catch) --- */
@@ -519,60 +532,94 @@
       var s = storage();
       if (!s) {
         el.storageNote.textContent = 'Trình duyệt đang chặn lưu trữ, nên tớ sẽ không nhớ gì sau khi cậu đóng trang.';
-        return;
+        return null;
       }
       try {
         var saved = JSON.parse(s.getItem(STORAGE_KEY) || 'null');
-        if (!saved || typeof saved !== 'object') return;
-        ['salary', 'days', 'hours', 'dependents', 'insuranceBase'].forEach(function (key) {
+        if (!saved) {
+          // Bản cũ chỉ có một ô lương, kèm chế độ net/gross
+          var old = JSON.parse(s.getItem(OLD_STORAGE_KEY) || 'null');
+          if (old && typeof old === 'object') {
+            saved = { days: old.days, hours: old.hours, region: old.region, insuranceBase: old.insuranceBase };
+            if (old.mode === 'gross') { saved.gross = old.salary; saved.dependents = old.dependents; }
+            else saved.salary = old.salary;
+          }
+          s.removeItem(OLD_STORAGE_KEY);
+        }
+        if (!saved || typeof saved !== 'object') return null;
+        ['salary', 'days', 'hours'].forEach(function (key) {
           if (typeof saved[key] === 'string') inputs[key].value = saved[key];
         });
-        if (saved.mode === 'gross' || saved.mode === 'net') setMode(saved.mode);
-        if (/^[1-4]$/.test(saved.region)) el.region.value = saved.region;
-      } catch (e) { /* dữ liệu hỏng thì bỏ qua */ }
+        ['gross', 'insuranceBase'].forEach(function (key) {
+          if (typeof saved[key] === 'string') gInputs[key].value = saved[key];
+        });
+        var dep = core.parseCount(saved.dependents);
+        if (dep !== null && dep >= 0 && dep <= 20 && Math.floor(dep) === dep) gross.dependents = dep;
+        if (/^[1-4]$/.test(saved.region)) gross.region = saved.region;
+        return saved.tab === 'gross' ? 'gross' : 'time';
+      } catch (e) {
+        return null; // dữ liệu hỏng thì bỏ qua
+      }
+    }
+
+    function currentTab() {
+      return el.panels.gross.hidden ? 'time' : 'gross';
     }
 
     function save() {
       try {
+        var s = storage();
+        if (!s) return;
         var data = {
-          mode: getMode(),
+          tab: currentTab(),
           salary: inputs.salary.value,
           days: inputs.days.value,
           hours: inputs.hours.value,
-          dependents: inputs.dependents.value,
-          insuranceBase: inputs.insuranceBase.value,
-          region: el.region.value
+          gross: gInputs.gross.value,
+          insuranceBase: gInputs.insuranceBase.value,
+          dependents: String(gross.dependents),
+          region: gross.region
         };
-        var s = storage();
-        if (!s) return;
-        var isDefault = data.mode === 'net' && !data.salary.trim() && !data.dependents.trim() &&
-          !data.insuranceBase.trim() && data.region === '1' &&
+        var isDefault = !data.salary.trim() && !data.gross.trim() && !data.insuranceBase.trim() &&
+          data.dependents === '0' && data.region === '1' &&
           data.days === String(core.DEFAULTS.days) && data.hours === String(core.DEFAULTS.hours);
-        if (isDefault) {
-          s.removeItem(STORAGE_KEY);
-        } else {
-          s.setItem(STORAGE_KEY, JSON.stringify(data));
-        }
+        if (isDefault) s.removeItem(STORAGE_KEY);
+        else s.setItem(STORAGE_KEY, JSON.stringify(data));
       } catch (e) { /* không lưu được thì thôi */ }
     }
 
     function clearSaved() {
       try {
         var s = storage();
-        if (s) s.removeItem(STORAGE_KEY);
+        if (s) { s.removeItem(STORAGE_KEY); s.removeItem(OLD_STORAGE_KEY); }
       } catch (e) { /* bỏ qua */ }
       inputs.salary.value = '';
       inputs.days.value = String(core.DEFAULTS.days);
       inputs.hours.value = String(core.DEFAULTS.hours);
-      inputs.dependents.value = '';
-      inputs.insuranceBase.value = '';
-      el.region.value = '1';
-      setMode('net');
+      gInputs.gross.value = '';
+      gInputs.insuranceBase.value = '';
+      gross.dependents = 0;
+      gross.region = '1';
+      el.adv.open = false;
       update(true);
+      updateGross(true);
       toast('Đã xoá. Máy này không còn nhớ lương của cậu nữa.');
     }
 
-    /* --- Hiển thị --- */
+    /* --- Tab --- */
+    function showTab(name, focus) {
+      el.tabs.forEach(function (tab) {
+        var on = tab.getAttribute('data-tab') === name;
+        tab.setAttribute('aria-selected', on ? 'true' : 'false');
+        tab.tabIndex = on ? 0 : -1;
+        if (on && focus) tab.focus();
+      });
+      el.panels.time.hidden = name !== 'time';
+      el.panels.gross.hidden = name !== 'gross';
+      try { history.replaceState(null, '', name === 'gross' ? '#gross' : location.pathname + location.search); } catch (e) { /* file:// */ }
+    }
+
+    /* --- Hiển thị chung --- */
     function toast(text) {
       el.toast.textContent = text;
       el.toast.classList.add('show');
@@ -585,73 +632,46 @@
       node.hidden = !text;
     }
 
-    function getMode() {
-      for (var i = 0; i < el.modeRadios.length; i++) {
-        if (el.modeRadios[i].checked) return el.modeRadios[i].value;
-      }
-      return 'net';
-    }
-
-    function setMode(mode) {
-      for (var i = 0; i < el.modeRadios.length; i++) {
-        el.modeRadios[i].checked = el.modeRadios[i].value === mode;
-      }
-      applyMode();
-    }
-
-    function applyMode() {
-      var mode = getMode();
-      el.salaryLabel.textContent = SALARY_COPY[mode].label;
-      el.salaryNote.textContent = SALARY_COPY[mode].note;
-      el.grossFields.hidden = mode !== 'gross';
-    }
-
-    function renderMessages() {
-      Object.keys(msgs).forEach(function (key) {
-        var f = state.fields[key];
-        var show = !!f && f.state !== 'ok' && f.message && !(f.state === 'empty' && (key === 'salary' || key === 'price'));
-        setText(msgs[key], show ? f.message : '');
-        inputs[key].setAttribute('aria-invalid', show ? 'true' : 'false');
+    function renderMessages(fields, inputMap, msgMap, silentEmpty) {
+      Object.keys(msgMap).forEach(function (key) {
+        var f = fields[key];
+        var show = f.state !== 'ok' && f.message && !(f.state === 'empty' && silentEmpty.indexOf(key) !== -1);
+        setText(msgMap[key], show ? f.message : '');
+        inputMap[key].setAttribute('aria-invalid', show ? 'true' : 'false');
       });
     }
 
-    function renderBreakdown() {
-      var g = state.gross;
-      el.breakdown.hidden = !g;
-      if (!g) return;
-      var rows = [
-        ['Lương gross', core.formatVND(g.gross), ''],
-        ['BHXH 8%', '−' + core.formatVND(g.bhxh), ''],
-        ['BHYT 1,5%', '−' + core.formatVND(g.bhyt), ''],
-        ['BHTN 1%', '−' + core.formatVND(g.bhtn), ''],
-        ['Thuế TNCN', g.tax ? '−' + core.formatVND(g.tax) : '0đ', ''],
-        ['Thực nhận ước tính', core.formatVND(g.net), 'total']
-      ];
-      el.breakdownList.textContent = '';
-      rows.forEach(function (row) {
-        var wrap = document.createElement('div');
-        if (row[2]) wrap.className = row[2];
-        var dt = document.createElement('dt');
-        dt.textContent = row[0];
-        var dd = document.createElement('dd');
-        dd.textContent = row[1];
-        wrap.appendChild(dt);
-        wrap.appendChild(dd);
-        el.breakdownList.appendChild(wrap);
+    function clearFixedMessages(fields, inputMap, msgMap) {
+      Object.keys(msgMap).forEach(function (key) {
+        if (fields[key].state === 'ok') {
+          setText(msgMap[key], '');
+          inputMap[key].setAttribute('aria-invalid', 'false');
+        }
       });
     }
 
-    function renderPreviews() {
-      Object.keys(previews).forEach(function (key) {
-        var f = state.fields[key];
-        var raw = inputs[key].value.trim();
+    function renderPreviews(fields, inputMap, previewMap) {
+      Object.keys(previewMap).forEach(function (key) {
+        var f = fields[key];
+        var raw = inputMap[key].value.trim();
         var text = '';
-        if (f && f.state === 'ok' && f.value !== null) {
+        if (f.state === 'ok' && f.value !== null) {
           var pretty = core.formatNumber(f.value);
           if (raw.replace(/\s*(đ|vnđ|vnd)$/i, '') !== pretty) text = '= ' + core.formatVND(f.value);
         }
-        setText(previews[key], text);
+        setText(previewMap[key], text);
       });
+    }
+
+    /* --- Tab "Quy ra giờ làm" --- */
+    function renderSchedule() {
+      var f = state.fields;
+      var ok = f.days.state === 'ok' && f.hours.state === 'ok';
+      el.schedSummary.textContent = ok
+        ? core.formatNumber(f.days.value, 2) + ' ngày/tháng · ' + core.formatNumber(f.hours.value, 2) + ' giờ/ngày'
+        : 'Ngày/giờ làm chưa hợp lý';
+      el.sched.classList.toggle('bad', !ok);
+      if (!ok) el.sched.open = true;
     }
 
     function renderResult() {
@@ -663,8 +683,7 @@
       if (state.hourlyRate !== null) {
         var f = state.fields;
         el.rate.textContent = 'Lương mỗi giờ của cậu: ' + core.formatVND(Math.round(state.hourlyRate)) +
-          '\n= ' + core.formatVND(state.netSalary) + (state.mode === 'gross' ? ' (thực nhận ước tính)' : '') +
-          ' ÷ (' + core.formatNumber(f.days.value, 2) +
+          '\n= ' + core.formatVND(f.salary.value) + ' ÷ (' + core.formatNumber(f.days.value, 2) +
           ' ngày × ' + core.formatNumber(f.hours.value, 2) + ' giờ)';
         el.rate.hidden = false;
       } else {
@@ -707,29 +726,102 @@
         days: inputs.days.value,
         hours: inputs.hours.value,
         name: inputs.name.value,
-        price: inputs.price.value,
-        salaryMode: getMode(),
-        dependents: inputs.dependents.value,
-        insuranceBase: inputs.insuranceBase.value,
-        region: el.region.value
+        price: inputs.price.value
       });
       renderResult();
-      renderBreakdown();
-      renderPreviews();
+      renderSchedule();
+      renderPreviews(state.fields, inputs, previews);
       // Báo lỗi chậm một nhịp để không nhấp nháy khi đang gõ dở ("15 tri…").
+      var show = function () { renderMessages(state.fields, inputs, msgs, ['salary', 'price']); };
       clearTimeout(msgTimer);
-      if (immediateMessages) renderMessages();
-      else msgTimer = setTimeout(renderMessages, 700);
-      // Ô nào đã hết lỗi thì gỡ thông báo ngay.
-      Object.keys(msgs).forEach(function (key) {
-        var f = state.fields[key];
-        if (!f || f.state === 'ok') {
-          setText(msgs[key], '');
-          inputs[key].setAttribute('aria-invalid', 'false');
-        }
-      });
+      if (immediateMessages) show();
+      else msgTimer = setTimeout(show, 700);
+      clearFixedMessages(state.fields, inputs, msgs);
     }
 
+    /* --- Tab "Gross → Net" --- */
+    function line(dl, label, value, cls) {
+      var wrap = document.createElement('div');
+      if (cls) wrap.className = cls;
+      var dt = document.createElement('dt');
+      dt.textContent = label;
+      var dd = document.createElement('dd');
+      dd.textContent = value;
+      wrap.appendChild(dt);
+      wrap.appendChild(dd);
+      dl.appendChild(wrap);
+    }
+
+    function pct(part, whole) {
+      return core.formatNumber(part / whole * 100, 1) + '%';
+    }
+
+    function renderGross() {
+      el.depValue.textContent = String(gross.dependents);
+      el.depMinus.disabled = gross.dependents <= 0;
+      el.depPlus.disabled = gross.dependents >= 20;
+      el.regions.forEach(function (btn) {
+        var on = btn.getAttribute('data-region') === gross.region;
+        btn.setAttribute('aria-checked', on ? 'true' : 'false');
+        btn.tabIndex = on ? 0 : -1;
+      });
+
+      var g = gState.result;
+      el.gHint.hidden = !!g;
+      el.gBody.hidden = !g;
+      if (!g) {
+        el.gHint.textContent = gState.hint;
+        return;
+      }
+
+      el.gNet.textContent = core.formatNumber(g.net);
+      el.gRatio.textContent = 'Bằng ' + pct(g.net, g.gross) + ' lương gross · ≈ ' +
+        core.formatNumber(g.net * 12 / 1e6, 1) + ' triệu mỗi năm';
+      el.gBar.net.style.width = (g.net / g.gross * 100) + '%';
+      el.gBar.ins.style.width = (g.insurance / g.gross * 100) + '%';
+      el.gBar.tax.style.width = (g.tax / g.gross * 100) + '%';
+
+      el.gLegend.textContent = '';
+      [['net', 'Thực nhận', g.net], ['ins', 'Bảo hiểm', g.insurance], ['tax', 'Thuế TNCN', g.tax]].forEach(function (item) {
+        var li = document.createElement('li');
+        var dot = document.createElement('span');
+        dot.className = 'dot dot-' + item[0];
+        var label = document.createElement('span');
+        label.textContent = item[1];
+        var value = document.createElement('b');
+        value.textContent = core.formatVND(item[2]);
+        li.appendChild(dot);
+        li.appendChild(label);
+        li.appendChild(value);
+        el.gLegend.appendChild(li);
+      });
+
+      el.gLines.textContent = '';
+      line(el.gLines, 'Lương gross', core.formatVND(g.gross));
+      line(el.gLines, 'BHXH 8%' + (g.socialCapped ? ' (chạm trần)' : ''), '−' + core.formatVND(g.bhxh));
+      line(el.gLines, 'BHYT 1,5%' + (g.socialCapped ? ' (chạm trần)' : ''), '−' + core.formatVND(g.bhyt));
+      line(el.gLines, 'BHTN 1%' + (g.unemploymentCapped ? ' (chạm trần)' : ''), '−' + core.formatVND(g.bhtn));
+      line(el.gLines, 'Giảm trừ gia cảnh', core.formatVND(g.deduction), 'sub');
+      line(el.gLines, 'Thu nhập tính thuế', core.formatVND(g.taxable), 'sub');
+      line(el.gLines, 'Thuế TNCN', g.tax ? '−' + core.formatVND(g.tax) : '0đ');
+      line(el.gLines, 'Thực nhận', core.formatVND(g.net), 'total');
+    }
+
+    function updateGross(immediateMessages) {
+      gState = core.evaluateGross({
+        gross: gInputs.gross.value,
+        dependents: gross.dependents,
+        insuranceBase: gInputs.insuranceBase.value,
+        region: gross.region
+      });
+      renderGross();
+      renderPreviews(gState.fields, gInputs, gPreviews);
+      var show = function () { renderMessages(gState.fields, gInputs, gMsgs, ['gross']); };
+      clearTimeout(gMsgTimer);
+      if (immediateMessages) show();
+      else gMsgTimer = setTimeout(show, 700);
+      clearFixedMessages(gState.fields, gInputs, gMsgs);
+    }
     /* --- Ảnh chia sẻ (không bao giờ có lương) --- */
     function wrapLines(ctx, text, maxWidth, maxLines) {
       var words = text.split(' ');
@@ -881,10 +973,10 @@
     }
 
     /* --- Sự kiện --- */
-    function reformatMoney(key) {
-      var f = state && state.fields[key];
-      if (f && f.state === 'ok' && f.value !== null) inputs[key].value = core.formatNumber(f.value);
-      update(true);
+    function reformat(input, field, rerender) {
+      if (field && field.state === 'ok' && field.value !== null) input.value = core.formatNumber(field.value);
+      rerender(true);
+      save();
     }
 
     Object.keys(inputs).forEach(function (key) {
@@ -893,20 +985,15 @@
         if (key !== 'name' && key !== 'price') save();
       });
     });
-    inputs.salary.addEventListener('change', function () { reformatMoney('salary'); save(); });
-    inputs.insuranceBase.addEventListener('change', function () { reformatMoney('insuranceBase'); save(); });
-    inputs.dependents.addEventListener('change', function () { update(true); });
-    el.region.addEventListener('change', function () { update(true); save(); });
-    for (var i = 0; i < el.modeRadios.length; i++) {
-      el.modeRadios[i].addEventListener('change', function () {
-        applyMode();
-        update(true);
-        save();
-      });
-    }
-    inputs.price.addEventListener('change', function () { reformatMoney('price'); });
+    inputs.salary.addEventListener('change', function () { reformat(inputs.salary, state.fields.salary, update); });
+    inputs.price.addEventListener('change', function () { reformat(inputs.price, state.fields.price, update); });
     inputs.days.addEventListener('change', function () { update(true); });
     inputs.hours.addEventListener('change', function () { update(true); });
+
+    Object.keys(gInputs).forEach(function (key) {
+      gInputs[key].addEventListener('input', function () { updateGross(false); save(); });
+      gInputs[key].addEventListener('change', function () { reformat(gInputs[key], gState.fields[key], updateGross); });
+    });
 
     el.chips.addEventListener('click', function (e) {
       var chip = e.target.closest('[data-name]');
@@ -917,16 +1004,75 @@
       inputs.price.focus();
     });
 
-    el.form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    el.tabs.forEach(function (tab, i) {
+      tab.addEventListener('click', function () { showTab(tab.getAttribute('data-tab')); save(); });
+      tab.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        var next = el.tabs[(i + (e.key === 'ArrowRight' ? 1 : el.tabs.length - 1)) % el.tabs.length];
+        showTab(next.getAttribute('data-tab'), true);
+        save();
+      });
+    });
+
+    $all('[data-go]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        showTab(btn.getAttribute('data-go'));
+        save();
+        window.scrollTo(0, 0);
+      });
+    });
+
+    function setDependents(n) {
+      gross.dependents = Math.max(0, Math.min(20, n));
+      updateGross(true);
+      save();
+    }
+    el.depMinus.addEventListener('click', function () { setDependents(gross.dependents - 1); });
+    el.depPlus.addEventListener('click', function () { setDependents(gross.dependents + 1); });
+
+    el.regions.forEach(function (btn, i) {
+      function pick(target) {
+        gross.region = target.getAttribute('data-region');
+        updateGross(true);
+        save();
+      }
+      btn.addEventListener('click', function () { pick(btn); });
+      btn.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        var next = el.regions[(i + (e.key === 'ArrowRight' ? 1 : el.regions.length - 1)) % el.regions.length];
+        pick(next);
+        next.focus();
+      });
+    });
+
+    el.useNet.addEventListener('click', function () {
+      if (!gState.result) return;
+      inputs.salary.value = core.formatNumber(gState.result.net);
+      showTab('time');
+      update(true);
+      save();
+      window.scrollTo(0, 0);
+      toast('Đã điền lương thực nhận ' + core.formatVND(gState.result.net) + '.');
+    });
+
+    $all('form').forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      });
     });
     el.share.addEventListener('click', share);
     el.clear.addEventListener('click', clearSaved);
 
-    load();
-    applyMode();
+    window.addEventListener('hashchange', function () {
+      showTab(location.hash === '#gross' ? 'gross' : 'time');
+    });
+
+    var savedTab = load();
+    if (gInputs.insuranceBase.value.trim()) el.adv.open = true;
+    showTab(location.hash === '#gross' ? 'gross' : (location.hash ? 'time' : savedTab || 'time'));
     update(true);
-    // Lần đầu mở trang, ô lương trống thì không cần báo lỗi gì cả.
+    updateGross(true);
   }
 })();

@@ -318,24 +318,35 @@ test('trần bảo hiểm: BHXH/BHYT 50,6tr, BHTN theo vùng', () => {
   assert.equal(g.net, 100000000 - g.insurance - g.tax);
 });
 
-const grossBase = Object.assign({}, base, { salaryMode: 'gross', salary: '30tr' });
-const evg = (patch) => Q.evaluate(Object.assign({}, grossBase, patch));
+const evg = (patch) => Q.evaluateGross(Object.assign({ gross: '30tr', dependents: 0, insuranceBase: '', region: '1' }, patch));
 
-test('evaluate ở chế độ gross dùng lương thực nhận ước tính', () => {
+test('evaluateGross: 30tr -> 26.215.000đ', () => {
   const out = evg({});
-  assert.equal(out.mode, 'gross');
-  assert.equal(out.netSalary, 26215000);
-  assert.ok(Math.abs(out.hourlyRate - 26215000 / 176) < 1e-9);
-  assert.ok(out.result);
+  assert.equal(out.result.net, 26215000);
+  assert.equal(out.result.socialCapped, false);
   noBadNumbers(out);
 });
 
-[['-1', 'invalid'], ['1,5', 'invalid'], ['hai', 'invalid'], ['21', 'invalid']].forEach(([dependents, st]) => {
-  test(`người phụ thuộc "${dependents}" -> ${st}`, () => {
+test('evaluateGross: gross trống / sai -> gợi ý, không kết quả', () => {
+  for (const gross of ['', 'abc', '0', '-5tr']) {
+    const out = evg({ gross });
+    assert.equal(out.result, null, gross);
+    assert.ok(out.hint, gross);
+    noBadNumbers(out);
+  }
+});
+
+test('evaluateGross: cờ chạm trần bảo hiểm', () => {
+  const r = evg({ gross: '120tr' }).result;
+  assert.equal(r.socialCapped, true);
+  assert.equal(r.unemploymentCapped, true);
+});
+
+[[-1, 'invalid'], ['1,5', 'invalid'], ['hai', 'invalid'], [21, 'invalid'], [3, 'ok']].forEach(([dependents, st]) => {
+  test(`người phụ thuộc ${JSON.stringify(dependents)} -> ${st}`, () => {
     const out = evg({ dependents });
     assert.equal(out.fields.dependents.state, st);
-    assert.equal(out.result, null);
-    assert.ok(out.hint);
+    assert.equal(!!out.result, st === 'ok');
     noBadNumbers(out);
   });
 });
@@ -344,14 +355,8 @@ test('lương đóng BH lớn hơn gross hoặc gõ linh tinh -> báo', () => {
   assert.equal(evg({ insuranceBase: '40tr' }).fields.insuranceBase.state, 'range');
   assert.equal(evg({ insuranceBase: 'abc' }).fields.insuranceBase.state, 'invalid');
   assert.equal(evg({ insuranceBase: '' }).fields.insuranceBase.state, 'ok');
+  assert.equal(evg({ insuranceBase: '10tr' }).result.insurance, 1050000);
   noBadNumbers(evg({ insuranceBase: 'abc' }));
-});
-
-test('chế độ thực nhận bỏ qua các ô gross', () => {
-  const out = ev({ dependents: 'linh tinh', insuranceBase: 'abc' });
-  assert.equal(out.netSalary, 15000000);
-  assert.equal(out.fields.dependents, undefined);
-  assert.ok(out.result);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
