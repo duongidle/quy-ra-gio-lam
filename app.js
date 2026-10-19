@@ -387,7 +387,14 @@
     insuranceInvalid: 'Tớ chưa đọc được số này. Để trống nếu công ty đóng bảo hiểm theo đúng lương gross.',
     insuranceTooHigh: 'Lương đóng bảo hiểm thường không cao hơn lương gross. Xem lại giúp tớ nhé.',
     hintGross: 'Nhập lương gross trên hợp đồng để xem thực nhận nhé.',
-    hintGrossFix: 'Phần quy đổi từ gross đang có ô chưa ổn, xem lại giúp tớ nhé.'
+    hintGrossFix: 'Phần quy đổi từ gross đang có ô chưa ổn, xem lại giúp tớ nhé.',
+    hintNet: 'Nhập số tiền muốn cầm về mỗi tháng nhé.',
+    allowanceCovers: 'Phụ cấp đã đủ số cậu muốn cầm rồi, khỏi cần lương luôn 😄',
+    hintOffers: 'Nhập lương gross của cả hai offer để so nhé.',
+    hintOffersFix: 'Có ô của offer đang chưa ổn, xem lại giúp tớ nhé.',
+    hintHabits: 'Nhập giá một thói quen bên dưới xem nó ăn bao nhiêu ngày công.',
+    timesInvalid: 'Số lần phải là số lớn hơn 0, ví dụ 5.',
+    hintNeedSalary: 'Cần lương về tay ở tab Mua sắm trước đã nhé.'
   };
 
   /*
@@ -682,36 +689,385 @@
           ', đáng ' + perDuration.phrase + ' của cậu.';
         result.quip = installmentQuip(share, perDuration.text, months, seed);
       }
+
+      var pct = Number(raw.savePct) || 0;
+      if (raw.payMode === 'save' && pct > 0) {
+        var perSave = f.salary.value * pct;
+        var saveMonths = total / perSave;
+        var span = formatMonths(saveMonths);
+        result.installment = null;
+        result.saving = { pct: pct, perMonth: Math.round(perSave), months: saveMonths, span: span };
+        result.sentence = 'Để dành ' + formatNumber(pct * 100) + '% lương (' + formatVND(Math.round(perSave)) +
+          ') mỗi tháng thì sau ' + span.text + ' là mua được.';
+        result.quip = savingQuip(saveMonths, span.text, seed);
+      } else {
+        result.saving = null;
+      }
       out.result = result;
     }
     return out;
   }
 
+  /*
+   * Dò ngược: cần gross bao nhiêu để thực nhận (kể cả phụ cấp) đạt `net`.
+   * Thực nhận tăng đơn điệu theo gross (thuế suất biên < 100%), nên chia đôi là đủ.
+   * Làm tròn lên tới nghìn đồng cho dễ đọc khi đi deal lương.
+   */
+  function netToGross(opts) {
+    var allowance = opts.allowance || 0;
+    var target = opts.net - allowance;
+    if (target <= 0) return null;
+    function netOf(g) {
+      return grossToNet({ gross: g, dependents: opts.dependents, insuranceBase: opts.insuranceBase,
+        region: opts.region }).net;
+    }
+    var lo = 0;
+    var hi = Math.max(target * 2, target + 1e6);
+    while (netOf(hi) < target) hi *= 2;
+    while (hi - lo > 1) {
+      var mid = Math.floor((lo + hi) / 2);
+      if (netOf(mid) >= target) hi = mid; else lo = mid;
+    }
+    return Math.ceil(hi / 1000) * 1000;
+  }
+
+  var NET_TO_GROSS_QUIPS = [
+    'Muốn cầm {net} thì xin gross {gross}. Nói to lên, đừng ngại!',
+    'Deal gross {gross} nha. Thấp hơn là về tay hụt đó.',
+    'Xin {gross} gross. Bị trả giá thì cười tươi rồi giữ giá 😌'
+  ];
+
   /**
-   * Trạng thái tab "Gross → Net".
-   * raw = { gross, allowance, dependents, insuranceBase, region } (chuỗi hoặc số).
+   * Trạng thái tab "Lương".
+   * raw = { mode: 'gross' | 'net', gross, allowance, dependents, insuranceBase, region }.
+   * Ở chế độ 'net', ô gross chứa số tiền muốn cầm về mỗi tháng.
    */
   function evaluateGross(raw) {
+    var isNet = raw.mode === 'net';
     var f = { gross: checkMoney(raw.gross, 'salary') };
     f.allowance = checkAllowance(raw.allowance);
     f.dependents = checkDependents(raw.dependents);
-    f.insuranceBase = checkInsuranceBase(raw.insuranceBase, f.gross.state === 'ok' ? f.gross.value : null);
-    var out = { fields: f, result: null, hint: null };
+    f.insuranceBase = checkInsuranceBase(raw.insuranceBase, f.gross.state === 'ok' && !isNet ? f.gross.value : null);
+    var out = { fields: f, mode: isNet ? 'net' : 'gross', result: null, hint: null };
 
     if (f.gross.state !== 'ok') {
-      out.hint = f.gross.state === 'empty' ? MSG.hintGross : MSG.hintSalaryFix;
-    } else if (f.allowance.state !== 'ok' || f.dependents.state !== 'ok' || f.insuranceBase.state !== 'ok') {
-      out.hint = MSG.hintGrossFix;
-    } else {
-      out.result = grossToNet({
-        gross: f.gross.value,
-        dependents: f.dependents.value,
-        insuranceBase: f.insuranceBase.value,
-        region: Number(raw.region) || 1,
-        allowance: f.allowance.value
-      });
+      out.hint = f.gross.state === 'empty' ? (isNet ? MSG.hintNet : MSG.hintGross) : MSG.hintSalaryFix;
+      return out;
     }
+    if (f.allowance.state !== 'ok' || f.dependents.state !== 'ok' || f.insuranceBase.state !== 'ok') {
+      out.hint = MSG.hintGrossFix;
+      return out;
+    }
+    var common = {
+      dependents: f.dependents.value,
+      insuranceBase: f.insuranceBase.value,
+      region: Number(raw.region) || 1,
+      allowance: f.allowance.value
+    };
+    var gross = f.gross.value;
+    if (isNet) {
+      gross = netToGross(Object.assign({ net: f.gross.value }, common));
+      if (gross === null) {
+        out.hint = MSG.allowanceCovers;
+        return out;
+      }
+    }
+    out.result = grossToNet(Object.assign({ gross: gross }, common));
+    if (isNet) out.result.target = f.gross.value;
     return out;
+  }
+
+  function netQuipFor(g, seed) {
+    if (g.target === undefined) return netQuip(g, seed);
+    return pickLine(NET_TO_GROSS_QUIPS, seed)
+      .replace('{net}', formatVND(g.target))
+      .replace('{gross}', formatVND(g.gross));
+  }
+
+  /* --- So sánh 2 offer: tính lương thực nhận mỗi giờ của từng chỗ --- */
+  var OFFER_QUIPS = [
+    { upTo: function (d) { return d < 0.03; }, lines: [
+      'Ngang ngửa nhau. Chọn chỗ nào sếp dễ thương hơn đi.',
+      'Chênh không đáng kể. Tính thêm đường đi làm với đồng nghiệp đi.',
+      'Hai bên như nhau. Chỗ nào gần nhà thì chọn. Hết.'
+    ] },
+    { upTo: function (d) { return d < 0.15; }, lines: [
+      'Offer {win} hơn {pct} mỗi giờ. Cũng đáng để nghĩ.',
+      '{win} trả mỗi giờ hơn {pct}. Không nhiều, không ít.',
+      'Nhỉnh hơn {pct} mỗi giờ cho {win}. Cân thêm vụ OT nha.'
+    ] },
+    { upTo: function () { return true; }, lines: [
+      'Offer {win} hơn hẳn {pct} mỗi giờ. Nghĩ chi nữa!',
+      '{win} trả mỗi giờ hơn {pct}. Chênh vậy là rõ rồi.',
+      'Hơn {pct} mỗi giờ. {win} thẳng tiến, đừng ngoảnh lại.'
+    ] }
+  ];
+
+  /**
+   * raw = { a: { gross, allowance, days, hours }, b: {...}, dependents, region }
+   * Trả về thực nhận, lương mỗi giờ của từng offer, bên thắng và phần trăm chênh.
+   */
+  function evaluateOffers(raw) {
+    var out = { fields: {}, result: null, hint: null };
+    var offers = {};
+    var anyEmpty = false;
+    var anyBad = false;
+    ['a', 'b'].forEach(function (k) {
+      var o = raw[k] || {};
+      var fo = {
+        gross: checkMoney(o.gross, 'salary'),
+        allowance: checkAllowance(o.allowance),
+        days: checkCount(o.days, 'days'),
+        hours: checkCount(o.hours, 'hours')
+      };
+      out.fields[k] = fo;
+      if (fo.gross.state === 'empty') anyEmpty = true;
+      else if (fo.gross.state !== 'ok') anyBad = true;
+      if (fo.allowance.state !== 'ok' || fo.days.state !== 'ok' || fo.hours.state !== 'ok') anyBad = true;
+      offers[k] = fo;
+    });
+    if (anyBad) { out.hint = MSG.hintOffersFix; return out; }
+    if (anyEmpty) { out.hint = MSG.hintOffers; return out; }
+    var res = {};
+    ['a', 'b'].forEach(function (k) {
+      var fo = offers[k];
+      var g = grossToNet({ gross: fo.gross.value, allowance: fo.allowance.value,
+        dependents: Number(raw.dependents) || 0, region: Number(raw.region) || 1 });
+      var monthHours = fo.days.value * fo.hours.value;
+      res[k] = { net: g.net, gross: g.gross, monthHours: monthHours, hourly: g.net / monthHours };
+    });
+    var win = res.a.hourly >= res.b.hourly ? 'a' : 'b';
+    var lose = win === 'a' ? 'b' : 'a';
+    var diff = res[win].hourly / res[lose].hourly - 1;
+    out.result = { a: res.a, b: res.b, win: win, diff: diff };
+    return out;
+  }
+
+  function offerQuip(diff, winLabel, seed) {
+    for (var i = 0; i < OFFER_QUIPS.length; i++) {
+      if (OFFER_QUIPS[i].upTo(diff)) {
+        return pickLine(OFFER_QUIPS[i].lines, seed)
+          .replace('{win}', winLabel)
+          .replace('{pct}', formatNumber(diff * 100, diff < 0.1 ? 1 : 0) + '%');
+      }
+    }
+    return '';
+  }
+
+  /* --- Để dành để mua --- */
+  // Số tháng -> chữ dễ đọc: dưới 1 tháng tính ngày, từ 2 năm tính năm.
+  function formatMonths(m) {
+    var parts;
+    if (m < 1) parts = [[String(Math.max(1, Math.ceil(m * 30))), 'ngày']];
+    else if (m < 24) parts = [[formatNumber(m, m < 10 ? 1 : 0), 'tháng']];
+    else parts = [[formatNumber(m / 12, 1), 'năm']];
+    return { parts: parts, text: parts[0][0] + ' ' + parts[0][1] };
+  }
+
+  var SAVING_QUIPS = [
+    { upTo: function (m) { return m < 1; }, lines: [
+      'Chưa tới một tháng. Nhịn chút là có. Ngon!',
+      'Vài tuần để dành là xong. Dễ ợt!',
+      'Bớt vài ly trà sữa là đủ. Duyệt!'
+    ] },
+    { upTo: function (m) { return m < 6; }, lines: [
+      'Để dành {t}. Hoặc trả góp rồi khóc 12 tháng. Chọn đi.',
+      'Kiên nhẫn {t} là món về tay. Được!',
+      '{t} nhịn ăn nhịn mặc. Chịu nổi không?'
+    ] },
+    { upTo: function (m) { return m < 24; }, lines: [
+      'Để dành {t}. Lâu đó, nhưng không nợ ai đồng nào.',
+      '{t} để dành. Giữa chừng đừng lỡ tay tiêu nha.',
+      'Mất {t}. Tới lúc mua chắc ra đời mới rồi 😅'
+    ] },
+    { upTo: function () { return true; }, lines: [
+      'Để dành {t}. Thôi tăng phần trăm lên đi.',
+      '{t} mới đủ. Ước mơ thì không có hạn sử dụng 🌙',
+      'Cỡ {t}. Cố lên, hoặc đổi món khác 🫠'
+    ] }
+  ];
+
+  function savingQuip(months, spanText, seed) {
+    for (var i = 0; i < SAVING_QUIPS.length; i++) {
+      if (SAVING_QUIPS[i].upTo(months)) return pickLine(SAVING_QUIPS[i].lines, seed).replace('{t}', spanText);
+    }
+    return '';
+  }
+
+  /* --- Thói quen hằng ngày --- */
+  var PER_YEAR = { day: 365, week: 52, month: 12 };
+
+  var HABIT_QUIPS = [
+    { upTo: function (d) { return d < 1; }, lines: [
+      '{Name} cả năm chưa tới một ngày công. Thả ga!',
+      '{Name} mỗi năm chỉ tốn {t}. Nhẹ nhàng thôi.',
+      '{Name} hả? {t} mỗi năm. Kệ đi, sống mà!'
+    ] },
+    { upTo: function (d) { return d < 5; }, lines: [
+      '{Name} mỗi năm ngốn {t} của cậu. Vài ngày công đó nha.',
+      '{Name} cả năm bằng {t}. Cũng hơi thấm.',
+      'Một năm {name} hết {t}. Coi như tiền mua vui.'
+    ] },
+    { upTo: function (d) { return d < 15; }, lines: [
+      '{Name} mỗi năm ngốn {t} của cậu. Gần nửa tháng đi làm đó.',
+      '{Name} cả năm bằng {t}. Thói quen nhỏ, hoá đơn to.',
+      '{t} mỗi năm cho {name}. Nghĩ lại chưa?'
+    ] },
+    { upTo: function (d) { return d < 30; }, lines: [
+      '{Name} mỗi năm ngốn {t}. Cả tháng đi làm chỉ để nuôi nó. Toang.',
+      '{Name} ăn của cậu {t} mỗi năm. Đau ví thật sự.',
+      '{t} cho {name}. Bỏ bớt là có ngay chuyến du lịch.'
+    ] },
+    { upTo: function () { return true; }, lines: [
+      '{Name} ăn hơn một tháng lương mỗi năm. Hết cứu.',
+      '{Name} tốn {t} mỗi năm. Thói quen hay khoản vay vậy?',
+      'Mỗi năm {t} cho {name}. Ví cậu đang kêu cứu đó 🆘'
+    ] }
+  ];
+
+  /**
+   * raw = { habits: [{ name, price, times, per: 'day'|'week'|'month' }] }
+   * ctx = { hourlyRate, hours, days } lấy từ tab Mua sắm (có thể null nếu chưa có lương).
+   */
+  function evaluateHabits(raw, ctx) {
+    var habits = raw.habits || [];
+    var fields = habits.map(function (h) {
+      var times = parseCount(h.times);
+      var tf = times === null ? { state: 'empty', message: MSG.timesInvalid }
+        : (isNaN(times) || times <= 0 || times > 100) ? { state: 'invalid', message: MSG.timesInvalid }
+        : { state: 'ok', value: times };
+      return { price: checkMoney(h.price, 'price'), times: tf };
+    });
+    var out = { fields: fields, result: null, hint: null };
+    var bad = fields.filter(function (f) {
+      return (f.price.state !== 'ok' && f.price.state !== 'empty') || (f.price.state === 'ok' && f.times.state !== 'ok');
+    })[0];
+    var chosen = [];
+    habits.forEach(function (h, i) {
+      if (fields[i].price.state === 'ok' && fields[i].times.state === 'ok') {
+        var perYear = fields[i].times.value * (PER_YEAR[h.per] || PER_YEAR.week);
+        chosen.push({ name: cleanName(h.name) || 'Thói quen ' + (i + 1), yearCost: fields[i].price.value * perYear });
+      }
+    });
+    if (!ctx || !ctx.hourlyRate) { out.hint = MSG.hintNeedSalary; return out; }
+    if (bad) { out.hint = bad.price.state !== 'ok' ? bad.price.message : bad.times.message; return out; }
+    if (!chosen.length) { out.hint = MSG.hintHabits; return out; }
+
+    chosen.forEach(function (c) {
+      c.minutes = c.yearCost / ctx.hourlyRate * 60;
+      c.workDays = c.minutes / (ctx.hours * 60);
+      c.duration = formatDuration(c.minutes, ctx.hours, ctx.days);
+    });
+    chosen.sort(function (a, b) { return b.yearCost - a.yearCost; });
+    var total = chosen.reduce(function (sum, c) { return sum + c.yearCost; }, 0);
+    var minutes = total / ctx.hourlyRate * 60;
+    var top = chosen[0];
+    var seed = top.name + '|' + total;
+    out.result = {
+      habits: chosen,
+      total: total,
+      minutes: minutes,
+      duration: formatDuration(minutes, ctx.hours, ctx.days),
+      top: top,
+      quip: habitQuip(top, seed),
+      equivalents: equivalents(total, chosen.map(function (c) { return c.name; }).join(', '))
+    };
+    return out;
+  }
+
+  function habitQuip(top, seed) {
+    for (var i = 0; i < HABIT_QUIPS.length; i++) {
+      if (HABIT_QUIPS[i].upTo(top.workDays)) {
+        return pickLine(HABIT_QUIPS[i].lines, seed)
+          .replace('{Name}', capitalizeFirst(top.name))
+          .replace('{name}', top.name.charAt(0).toLowerCase() === top.name.charAt(0) ? top.name : lowerFirst(top.name))
+          .replace('{t}', top.duration.text);
+      }
+    }
+    return '';
+  }
+
+  // "Trà sữa" -> "trà sữa", nhưng giữ "iPhone", "Netflix" nếu chữ thứ hai viết hoa hoặc là tên riêng.
+  function lowerFirst(s) {
+    var chars = Array.from(s);
+    if (chars[1] && chars[1] !== chars[1].toLowerCase()) return s;
+    return chars[0].toLowerCase() + chars.slice(1).join('');
+  }
+
+  /* --- Đồng hồ kiếm tiền --- */
+  function parseClock(text) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(text || '').trim());
+    if (!m) return null;
+    var h = Number(m[1]);
+    var min = Number(m[2]);
+    if (h > 23 || min > 59) return null;
+    return h * 60 + min;
+  }
+
+  /**
+   * nowSec: số giây tính từ 0:00 hôm nay. start/end: phút trong ngày. dailyPay: lương một ngày công.
+   * Tiền chạy đều từ giờ vào tới giờ về (tính cả giờ nghỉ trưa, cho vui).
+   */
+  function clockState(nowSec, start, end, dailyPay) {
+    var span = ((end - start + 1440) % 1440 || 1440) * 60;
+    var since = nowSec - start * 60;
+    if (since < 0 && start > end) since += 86400; // ca qua đêm
+    var ratePerSec = dailyPay / span;
+    if (since < 0) return { phase: 'before', earned: 0, ratePerSec: ratePerSec, progress: 0, untilStart: -since };
+    if (since >= span) return { phase: 'after', earned: dailyPay, ratePerSec: ratePerSec, progress: 1 };
+    return { phase: 'working', earned: dailyPay * since / span, ratePerSec: ratePerSec, progress: since / span };
+  }
+
+  // "đủ 9 ly cà phê": chọn món đời thường mua được số lượng tròn, dễ hình dung nhất.
+  function affordable(amount) {
+    var best = null;
+    EVERYDAY.forEach(function (ref) {
+      var n = Math.floor(amount / ref.price);
+      if (n < 1 || n > 99) return;
+      var score = Math.abs(Math.log(n / 10));
+      if (!best || score < best.score) best = { score: score, text: 'đủ ' + n + ' ' + ref.name + ' ' + ref.emoji };
+    });
+    return best ? best.text : '';
+  }
+
+  var TOILET_QUIPS = [
+    { upTo: function (sec) { return sec < 60; }, lines: [
+      'Đi nhanh vậy? Chưa kịp kiếm được bao nhiêu.',
+      'Chưa tới một phút. Tốc độ ánh sáng luôn.',
+      'Nhanh gọn lẹ. Công ty chắc tiếc cho cậu.'
+    ] },
+    { upTo: function (sec) { return sec < 300; }, lines: [
+      'Vừa kiếm {money} trong lúc ngồi toilet. Đi làm chính là đây!',
+      'Ngồi {t}, công ty trả {money}. Hợp lý!',
+      'Kiếm {money} mà không cần gõ phím. Ngon!'
+    ] },
+    { upTo: function (sec) { return sec < 900; }, lines: [
+      'Ngồi {t}, bỏ túi {money}. Lướt điện thoại hơi lâu rồi đó 👀',
+      'Kiếm {money} trên ngai vàng. Sếp mà biết… 🤫',
+      '{t} trong toilet, {money} vào ví. Quá lời!'
+    ] },
+    { upTo: function () { return true; }, lines: [
+      'Ngồi tận {t}, kiếm {money}. Chân tê chưa?',
+      'Toilet {t}, lương {money}. Coi chừng bị gọi đi họp.',
+      '{t} lận! {money} này là tiền thuê nhà vệ sinh đó hả 😂'
+    ] }
+  ];
+
+  function formatElapsed(sec) {
+    var m = Math.floor(sec / 60);
+    var s2 = Math.floor(sec % 60);
+    return m ? m + ' phút' + (s2 ? ' ' + s2 + ' giây' : '') : s2 + ' giây';
+  }
+
+  function toiletQuip(seconds, amount, seed) {
+    for (var i = 0; i < TOILET_QUIPS.length; i++) {
+      if (TOILET_QUIPS[i].upTo(seconds)) {
+        return pickLine(TOILET_QUIPS[i].lines, seed)
+          .replace('{money}', formatVND(Math.round(amount)))
+          .replace('{t}', formatElapsed(seconds));
+      }
+    }
+    return '';
   }
 
   var Core = {
@@ -738,7 +1094,25 @@
     progressiveTax: progressiveTax,
     grossToNet: grossToNet,
     evaluate: evaluate,
-    evaluateGross: evaluateGross
+    evaluateGross: evaluateGross,
+    netToGross: netToGross,
+    netQuipFor: netQuipFor,
+    NET_TO_GROSS_QUIPS: NET_TO_GROSS_QUIPS,
+    evaluateOffers: evaluateOffers,
+    OFFER_QUIPS: OFFER_QUIPS,
+    offerQuip: offerQuip,
+    formatMonths: formatMonths,
+    SAVING_QUIPS: SAVING_QUIPS,
+    savingQuip: savingQuip,
+    PER_YEAR: PER_YEAR,
+    HABIT_QUIPS: HABIT_QUIPS,
+    evaluateHabits: evaluateHabits,
+    parseClock: parseClock,
+    clockState: clockState,
+    affordable: affordable,
+    TOILET_QUIPS: TOILET_QUIPS,
+    toiletQuip: toiletQuip,
+    formatElapsed: formatElapsed
   };
 
   if (typeof module === 'object' && module.exports) module.exports = Core;
@@ -764,7 +1138,22 @@
     var inputs = { salary: $('salary'), days: $('days'), hours: $('hours') };
     // Giỏ hàng chỉ sống trong phiên này, không lưu lại (lưu lịch sử nằm ngoài phạm vi)
     var cart = [{ name: '', price: '' }];
-    var installment = 0;
+    var payMode = 'now';
+    var installment = 12;
+    var savePct = 0.2;
+    var shareTpl = 'card';
+    // Tab Lương: 'gross' (gross → net), 'net' (net → gross), 'offers' (so 2 offer).
+    // calcMode nhớ chiều tính đang dùng cho ô lương, kể cả khi đang mở phần so offer.
+    var grossMode = 'gross';
+    var calcMode = 'gross';
+    var offers = {
+      a: { gross: '', allowance: '', days: '22', hours: '8' },
+      b: { gross: '', allowance: '', days: '22', hours: '8' }
+    };
+    // Thói quen được lưu lại (là thiết lập, không phải lịch sử)
+    var habits = [{ name: '', price: '', times: '5', per: 'week' }];
+    var CLOCK_DEFAULT = { start: '08:30', end: '17:30' };
+    var toilet = null; // { startedAt (ms) } khi đang ngồi
     var gInputs = { gross: $('gross'), allowance: $('allowance'), insuranceBase: $('insurance-base') };
     var MONEY_KEYS = ['salary', 'price', 'gross', 'allowance', 'insuranceBase'];
     var gross = { dependents: 0, region: '1' };
@@ -774,7 +1163,46 @@
 
     var el = {
       tabs: $all('[role="tab"]'),
-      panels: { gross: $('panel-gross'), time: $('panel-time') },
+      panels: { gross: $('panel-gross'), time: $('panel-time'), habit: $('panel-habit'), clock: $('panel-clock') },
+      modes: $all('[data-mode]'),
+      grossForm: $('gross-form'),
+      offersForm: $('offers-form'),
+      offerInputs: $all('[data-offer]'),
+      grossLabel: $('gross-label'),
+      gHero: $('g-hero'),
+      gLabel: $('g-label'),
+      oHero: $('o-hero'),
+      oBig: $('o-big'),
+      oLines: $('o-lines'),
+      oSub: $('o-sub'),
+      pays: $all('[data-pay]'),
+      pcts: $all('[data-pct]'),
+      instRow: $('inst-row'),
+      saveRow: $('save-row'),
+      shareBox: $('share-box'),
+      tpls: $all('[data-tpl]'),
+      habits: $('habits'),
+      habitChips: $('habit-chips'),
+      habitCtx: $('habit-ctx'),
+      hBig: $('h-big'),
+      hDetail: $('h-detail'),
+      hEquiv: $('h-equiv'),
+      hSub: $('h-sub'),
+      hDetailList: $('h-detail-list'),
+      hLines: $('h-lines'),
+      clockStart: $('clock-start'),
+      clockEnd: $('clock-end'),
+      clockDaily: $('clock-daily'),
+      clockCtx: $('clock-ctx'),
+      cSticker: $('c-sticker'),
+      cLabel: $('c-label'),
+      cBig: $('c-big'),
+      cBar: $('c-bar'),
+      cProgress: $('c-progress'),
+      cSub: $('c-sub'),
+      toiletBtn: $('toilet'),
+      toiletLive: $('toilet-live'),
+      toiletQuip: $('toilet-quip'),
       big: $('big'),
       detail: $('detail'),
       sentence: $('sentence'),
@@ -809,6 +1237,8 @@
 
     var state = null;
     var gState = null;
+    var oState = null;
+    var hState = null;
     var lastBig = '';
     var lastNet = '';
     var msgTimer = 0;
@@ -854,19 +1284,40 @@
         ['gross', 'allowance', 'insuranceBase'].forEach(function (key) {
           if (typeof saved[key] === 'string') gInputs[key].value = saved[key];
         });
+        if (Array.isArray(saved.habits) && saved.habits.length) {
+          habits = saved.habits.slice(0, 30).map(function (h) {
+            return {
+              name: typeof h.name === 'string' ? h.name : '',
+              price: typeof h.price === 'string' ? h.price : '',
+              times: typeof h.times === 'string' ? h.times : '1',
+              per: core.PER_YEAR[h.per] ? h.per : 'week'
+            };
+          });
+        }
+        if (core.parseClock(saved.clockStart) !== null) el.clockStart.value = saved.clockStart;
+        if (core.parseClock(saved.clockEnd) !== null) el.clockEnd.value = saved.clockEnd;
         var dep = core.parseCount(saved.dependents);
         if (dep !== null && dep >= 0 && dep <= 20 && Math.floor(dep) === dep) gross.dependents = dep;
         if (/^[1-4]$/.test(saved.region)) gross.region = saved.region;
+        if (saved.calcMode === 'net') { calcMode = 'net'; grossMode = 'net'; }
         // Bản lưu cũ không có cờ này: đã có lương tự gõ thì giữ nguyên, đừng ghi đè
         salaryLinked = typeof saved.linked === 'boolean' ? saved.linked : !(saved.salary && saved.salary.trim());
-        return saved.tab === 'time' || saved.tab === 'gross' ? saved.tab : null;
+        return el.panels[saved.tab] ? saved.tab : null;
       } catch (e) {
         return null; // dữ liệu hỏng thì bỏ qua
       }
     }
 
     function currentTab() {
-      return el.panels.gross.hidden ? 'time' : 'gross';
+      var names = Object.keys(el.panels);
+      for (var i = 0; i < names.length; i++) {
+        if (!el.panels[names[i]].hidden) return names[i];
+      }
+      return 'gross';
+    }
+
+    function habitsBlank() {
+      return habits.every(function (h) { return !h.name.trim() && !h.price.trim(); });
     }
 
     function save() {
@@ -883,11 +1334,16 @@
           insuranceBase: gInputs.insuranceBase.value,
           dependents: String(gross.dependents),
           region: gross.region,
-          linked: salaryLinked
+          linked: salaryLinked,
+          calcMode: calcMode,
+          habits: habitsBlank() ? [] : habits,
+          clockStart: el.clockStart.value,
+          clockEnd: el.clockEnd.value
         };
         var isDefault = !data.salary.trim() && !data.gross.trim() && !data.allowance.trim() &&
           !data.insuranceBase.trim() && data.dependents === '0' && data.region === '1' &&
-          data.days === String(core.DEFAULTS.days) && data.hours === String(core.DEFAULTS.hours);
+          data.days === String(core.DEFAULTS.days) && data.hours === String(core.DEFAULTS.hours) &&
+          !data.habits.length && data.clockStart === CLOCK_DEFAULT.start && data.clockEnd === CLOCK_DEFAULT.end;
         if (isDefault) s.removeItem(STORAGE_KEY);
         else s.setItem(STORAGE_KEY, JSON.stringify(data));
       } catch (e) { /* không lưu được thì thôi */ }
@@ -907,6 +1363,10 @@
       gInputs.insuranceBase.value = '';
       gross.dependents = 0;
       gross.region = '1';
+      habits = [{ name: '', price: '', times: '5', per: 'week' }];
+      el.clockStart.value = CLOCK_DEFAULT.start;
+      el.clockEnd.value = CLOCK_DEFAULT.end;
+      renderHabits();
       updateAll(true);
       toast('Đã xoá. Máy này không còn nhớ lương của cậu nữa.');
     }
@@ -919,11 +1379,12 @@
         tab.tabIndex = on ? 0 : -1;
         if (on && focus) tab.focus();
       });
-      el.panels.time.hidden = name !== 'time';
-      el.panels.gross.hidden = name !== 'gross';
+      Object.keys(el.panels).forEach(function (key) { el.panels[key].hidden = key !== name; });
       // Hash khác id của mọi ô nhập, kẻo trình duyệt tự nhảy tới và focus vào ô đó
-      try { history.replaceState(null, '', name === 'gross' ? '#net' : '#time'); } catch (e) { /* file:// */ }
+      try { history.replaceState(null, '', '#' + HASHES[name]); } catch (e) { /* file:// */ }
+      tick();
     }
+    var HASHES = { gross: 'net', time: 'time', habit: 'habit', clock: 'clock' };
 
     /* --- Hiển thị chung --- */
     function toast(text) {
@@ -970,6 +1431,29 @@
       return input.id === 'insurance-base' ? 'insuranceBase' : input.id;
     }
 
+    // Đánh dấu nút đang chọn trong một nhóm radio dạng nút bấm
+    function checkGroup(buttons, attr, value) {
+      buttons.forEach(function (btn) {
+        var on = btn.getAttribute(attr) === value;
+        btn.setAttribute('aria-checked', on ? 'true' : 'false');
+        btn.tabIndex = on ? 0 : -1;
+      });
+    }
+
+    // Nhóm radio dạng nút: bấm để chọn, mũi tên trái/phải để đổi
+    function radioGroup(buttons, onPick) {
+      buttons.forEach(function (btn, i) {
+        btn.addEventListener('click', function () { onPick(btn); });
+        btn.addEventListener('keydown', function (e) {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          var next = buttons[(i + (e.key === 'ArrowRight' ? 1 : buttons.length - 1)) % buttons.length];
+          onPick(next);
+          next.focus();
+        });
+      });
+    }
+
     function setBig(node, parts) {
       node.textContent = '';
       parts.forEach(function (p) {
@@ -992,15 +1476,17 @@
         : '—';
 
       renderItemSubs(showErrors);
-      el.months.forEach(function (btn) {
-        var on = Number(btn.getAttribute('data-months')) === installment;
-        btn.setAttribute('aria-checked', on ? 'true' : 'false');
-        btn.tabIndex = on ? 0 : -1;
-      });
+      checkGroup(el.pays, 'data-pay', payMode);
+      checkGroup(el.months, 'data-months', String(installment));
+      checkGroup(el.pcts, 'data-pct', String(savePct));
+      checkGroup(el.tpls, 'data-tpl', shareTpl);
+      el.instRow.hidden = payMode !== 'installment';
+      el.saveRow.hidden = payMode !== 'save';
 
       var r = state.result;
-      el.share.hidden = !r;
+      el.shareBox.hidden = !r;
       el.tLabel.textContent = r && r.installment ? 'Mỗi tháng tốn của cậu'
+        : r && r.saving ? 'Để dành ' + core.formatNumber(r.saving.pct * 100) + '% lương thì cần'
         : (r && r.count > 1 ? 'Giỏ này tốn của cậu' : 'Món này tốn của cậu');
       if (!r) {
         el.big.textContent = '—';
@@ -1014,12 +1500,17 @@
         return;
       }
       var inst = r.installment;
+      var sv = r.saving;
       var d = inst ? inst.perDuration : r.duration;
+      var parts = sv ? sv.span.parts : d.parts;
       el.big.classList.remove('empty');
-      setBig(el.big, d.parts);
-      el.tSticker.textContent = inst ? '💳' : core.stickerFor(d.kind);
-      if (d.text + installment !== lastBig) { pop(el.big); pop(el.tSticker); lastBig = d.text + installment; }
-      var extra = inst
+      setBig(el.big, parts);
+      el.tSticker.textContent = sv ? '🐷' : inst ? '💳' : core.stickerFor(d.kind);
+      var bigKey = JSON.stringify(parts) + payMode;
+      if (bigKey !== lastBig) { pop(el.big); pop(el.tSticker); lastBig = bigKey; }
+      var extra = sv
+        ? 'mỗi tháng để dành ' + core.formatVND(sv.perMonth) + ' · trả thẳng thì tốn ' + r.duration.text
+        : inst
         ? 'trong ' + inst.months + ' tháng · tổng ' + r.duration.text
         : [d.detail, d.monthsLine].filter(Boolean).join(' · ');
       el.detail.textContent = extra;
@@ -1160,7 +1651,29 @@
       return core.formatNumber(part / whole * 100, 1) + '%';
     }
 
+    var GROSS_COPY = {
+      gross: { label: 'Lương gross', sub: 'Trước thuế và bảo hiểm', placeholder: '30tr', hero: 'Mỗi tháng cầm về' },
+      net: { label: 'Muốn cầm về', sub: 'Mỗi tháng, đã gồm phụ cấp', placeholder: '20tr', hero: 'Cần deal gross' }
+    };
+
     function renderGross(showErrors) {
+      var offersMode = grossMode === 'offers';
+      el.modes.forEach(function (btn) {
+        var on = btn.getAttribute('data-mode') === grossMode;
+        btn.setAttribute('aria-checked', on ? 'true' : 'false');
+        btn.tabIndex = on ? 0 : -1;
+      });
+      el.grossForm.hidden = offersMode;
+      el.offersForm.hidden = !offersMode;
+      el.gHero.hidden = offersMode;
+      el.oHero.hidden = !offersMode;
+      var copy = GROSS_COPY[calcMode];
+      el.grossLabel.textContent = copy.label;
+      $('gross-sub').setAttribute('data-default', copy.sub);
+      gInputs.gross.placeholder = copy.placeholder;
+      el.gLabel.textContent = copy.hero;
+      renderOffers(showErrors);
+
       Object.keys(gInputs).forEach(function (key) {
         renderSub(gInputs[key], gState.fields[key], showErrors);
       });
@@ -1175,8 +1688,8 @@
 
       var g = gState.result;
       el.gBar.hidden = !g;
-      el.gDetail.hidden = !g;
-      el.useNet.hidden = !g;
+      el.gDetail.hidden = !g || offersMode;
+      el.useNet.hidden = !g || offersMode;
       if (!g) {
         el.gNet.textContent = '—';
         el.gNet.parentNode.classList.add('empty');
@@ -1187,11 +1700,11 @@
       }
 
       el.gNet.parentNode.classList.remove('empty');
-      var netText = core.formatNumber(g.net);
+      var netText = core.formatNumber(calcMode === 'net' ? g.gross : g.net);
       el.gNet.textContent = '';
       setBig(el.gNet, [[netText, 'đ']]);
-      if (netText !== lastNet) { pop(el.gNet); pop(el.gSticker); lastNet = netText; }
-      el.gQuip.textContent = core.netQuip(g, g.gross + '|' + g.allowance + '|' + gross.dependents);
+      if (netText + calcMode !== lastNet) { pop(el.gNet); pop(el.gSticker); lastNet = netText + calcMode; }
+      el.gQuip.textContent = core.netQuipFor(g, g.gross + '|' + g.allowance + '|' + gross.dependents);
       el.gQuip.hidden = false;
 
       var total = g.gross + g.allowance;
@@ -1209,6 +1722,7 @@
         });
 
       el.gLines.textContent = '';
+      if (calcMode === 'net') line('Gross cần xin', core.formatVND(g.gross));
       line('BHXH 8%', '−' + core.formatVND(g.bhxh), '', g.socialCapped ? 'Đã chạm mức trần' : '');
       line('BHYT 1,5%', '−' + core.formatVND(g.bhyt), '', g.socialCapped ? 'Đã chạm mức trần' : '');
       line('BHTN 1%', '−' + core.formatVND(g.bhtn), '', g.unemploymentCapped ? 'Đã chạm mức trần' : '');
@@ -1218,8 +1732,47 @@
       line('Thực nhận', core.formatVND(g.net), 'total');
     }
 
+    /* --- So sánh 2 offer --- */
+    function renderOffers(showErrors) {
+      el.offerInputs.forEach(function (input) {
+        var f = oState.fields[input.getAttribute('data-offer')][input.getAttribute('data-key')];
+        var bad = f && f.state !== 'ok' && !(f.state === 'empty' && input.getAttribute('data-key') === 'gross');
+        if (showErrors || !bad) input.setAttribute('aria-invalid', bad ? 'true' : 'false');
+      });
+      var r = oState.result;
+      el.oLines.hidden = !r;
+      if (!r) {
+        el.oBig.textContent = '—';
+        el.oBig.classList.add('empty');
+        el.oSub.textContent = oState.hint;
+        return;
+      }
+      var winLabel = r.win.toUpperCase();
+      el.oBig.classList.remove('empty');
+      if (r.diff < 0.005) setBig(el.oBig, [['Hoà', 'gần như bằng nhau']]);
+      else setBig(el.oBig, [['+' + core.formatNumber(r.diff * 100, r.diff < 0.1 ? 1 : 0) + '%', 'mỗi giờ cho ' + winLabel]]);
+      el.oLines.textContent = '';
+      ['a', 'b'].forEach(function (k) {
+        var row = document.createElement('div');
+        if (k === r.win && r.diff >= 0.005) row.className = 'win';
+        var dt = document.createElement('dt');
+        dt.textContent = 'Offer ' + k.toUpperCase();
+        var dd = document.createElement('dd');
+        dd.textContent = core.formatVND(Math.round(r[k].hourly)) + '/giờ';
+        var small = document.createElement('small');
+        small.textContent = 'Về tay ' + core.formatVND(r[k].net) + ' · ' + core.formatNumber(r[k].monthHours) + ' giờ/tháng';
+        dt.appendChild(small);
+        row.appendChild(dt);
+        row.appendChild(dd);
+        el.oLines.appendChild(row);
+      });
+      el.oSub.textContent = core.offerQuip(r.diff, 'Offer ' + winLabel,
+        offers.a.gross + '|' + offers.b.gross + '|' + offers.a.days + '|' + offers.b.days);
+    }
+
     function updateAll(showErrors) {
       gState = core.evaluateGross({
+        mode: calcMode,
         gross: gInputs.gross.value,
         allowance: gInputs.allowance.value,
         dependents: gross.dependents,
@@ -1236,20 +1789,326 @@
       el.footRelink.hidden = !gState.result || salaryLinked;
       if (gState.result) el.relink.textContent = 'Dùng lại ' + core.formatVND(gState.result.net) + ' từ tab lương';
 
+      oState = core.evaluateOffers({ a: offers.a, b: offers.b, dependents: gross.dependents, region: gross.region });
+
       state = core.evaluate({
         salary: inputs.salary.value,
         days: inputs.days.value,
         hours: inputs.hours.value,
         items: cart,
-        installment: installment
+        payMode: payMode,
+        installment: payMode === 'installment' ? installment : 0,
+        savePct: savePct
       });
+      hState = core.evaluateHabits({ habits: habits }, workContext());
       renderTime(showErrors);
       renderGross(showErrors);
+      renderHabitResult(showErrors);
+      renderClockStatic();
       // Báo lỗi chậm một nhịp để không nhấp nháy khi đang gõ dở ("15 tri…").
       clearTimeout(msgTimer);
       if (!showErrors) {
-        msgTimer = setTimeout(function () { renderTime(true); renderGross(true); }, 700);
+        msgTimer = setTimeout(function () { renderTime(true); renderGross(true); renderHabitResult(true); }, 700);
       }
+    }
+
+    // Lương mỗi giờ, giờ/ngày, ngày/tháng lấy từ tab Mua sắm, dùng chung cho Thói quen và Đồng hồ
+    function workContext() {
+      if (!state || state.hourlyRate === null) return null;
+      return {
+        hourlyRate: state.hourlyRate,
+        hours: state.fields.hours.value,
+        days: state.fields.days.value,
+        salary: state.fields.salary.value
+      };
+    }
+
+    function renderSalaryContext(node) {
+      var c = workContext();
+      node.textContent = '';
+      var go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'link-btn';
+      go.setAttribute('data-go', 'time');
+      if (c) {
+        node.appendChild(document.createTextNode('Dựa trên lương về tay ' + core.formatVND(c.salary) + ', ' +
+          core.formatNumber(c.days, 2) + ' ngày × ' + core.formatNumber(c.hours, 2) + ' giờ. '));
+        go.textContent = 'Sửa';
+      } else {
+        node.appendChild(document.createTextNode('Chưa có lương về tay. '));
+        go.textContent = 'Nhập ở tab Mua sắm';
+      }
+      node.appendChild(go);
+    }
+
+    /* --- Thói quen --- */
+    var PER_LABEL = { day: 'ngày', week: 'tuần', month: 'tháng' };
+
+    function renderHabits(focusIndex, focusField) {
+      el.habits.textContent = '';
+      habits.forEach(function (h, idx) {
+        var n = idx + 1;
+        var row = document.createElement('div');
+        row.className = 'row item-row habit-row';
+
+        var main = document.createElement('span');
+        main.className = 'row-main';
+        var name = document.createElement('input');
+        name.type = 'text';
+        name.className = 'item-name';
+        name.maxLength = 60;
+        name.placeholder = 'Thói quen ' + n;
+        name.setAttribute('aria-label', 'Tên thói quen ' + n);
+        name.value = h.name;
+
+        var freq = document.createElement('span');
+        freq.className = 'freq';
+        var times = document.createElement('input');
+        times.type = 'text';
+        times.inputMode = 'decimal';
+        times.className = 'freq-times';
+        times.value = h.times;
+        times.setAttribute('aria-label', 'Số lần, thói quen ' + n);
+        var per = document.createElement('select');
+        per.className = 'freq-per';
+        per.setAttribute('aria-label', 'Mỗi ngày, tuần hay tháng, thói quen ' + n);
+        Object.keys(PER_LABEL).forEach(function (key) {
+          var opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = 'lần / ' + PER_LABEL[key];
+          if (key === h.per) opt.selected = true;
+          per.appendChild(opt);
+        });
+        freq.appendChild(times);
+        freq.appendChild(per);
+
+        var sub = document.createElement('span');
+        sub.className = 'row-sub';
+        main.appendChild(name);
+        main.appendChild(freq);
+        main.appendChild(sub);
+
+        var wrap = document.createElement('span');
+        wrap.className = 'row-input money';
+        var price = document.createElement('input');
+        price.type = 'text';
+        price.className = 'item-price';
+        price.inputMode = 'text';
+        price.placeholder = '45k';
+        price.spellcheck = false;
+        price.setAttribute('autocapitalize', 'off');
+        price.setAttribute('aria-label', 'Giá mỗi lần, thói quen ' + n);
+        price.value = h.price;
+        wrap.appendChild(price);
+
+        row.appendChild(main);
+        row.appendChild(wrap);
+        if (habits.length > 1) {
+          var remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'item-remove';
+          remove.textContent = '✕';
+          remove.setAttribute('aria-label', 'Bỏ thói quen ' + n);
+          remove.addEventListener('click', function () {
+            habits.splice(idx, 1);
+            renderHabits();
+            updateAll(true);
+            save();
+          });
+          row.appendChild(remove);
+        }
+
+        function edited() { updateAll(false); save(); }
+        name.addEventListener('input', function () { h.name = name.value; edited(); });
+        times.addEventListener('input', function () { h.times = times.value; edited(); });
+        per.addEventListener('change', function () { h.per = per.value; updateAll(true); save(); });
+        price.addEventListener('input', function () { h.price = price.value; edited(); });
+        price.addEventListener('change', function () {
+          var f = hState.fields[idx] && hState.fields[idx].price;
+          if (f && f.state === 'ok') { price.value = core.formatNumber(f.value); h.price = price.value; }
+          updateAll(true);
+          save();
+        });
+        el.habits.appendChild(row);
+      });
+      var add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'row add-row';
+      add.textContent = '+ Thêm thói quen';
+      el.habits.appendChild(add);
+      if (focusIndex !== undefined) {
+        var rows = el.habits.querySelectorAll('.habit-row');
+        var target = rows[focusIndex] && rows[focusIndex].querySelector(focusField === 'name' ? '.item-name' : '.item-price');
+        if (target) target.focus();
+      }
+    }
+
+    function renderHabitResult(showErrors) {
+      renderSalaryContext(el.habitCtx);
+      var rows = el.habits.querySelectorAll('.habit-row');
+      habits.forEach(function (h, idx) {
+        var row = rows[idx];
+        var f = hState.fields[idx];
+        if (!row || !f) return;
+        var sub = row.querySelector('.row-sub');
+        var priceBad = f.price.state !== 'ok' && f.price.state !== 'empty';
+        var timesBad = f.price.state === 'ok' && f.times.state !== 'ok';
+        var text = '';
+        var cls = '';
+        if (showErrors && (priceBad || timesBad)) {
+          text = priceBad ? f.price.message : f.times.message;
+          cls = 'warn';
+        } else if (f.price.state === 'ok') {
+          var raw = h.price.trim().replace(/\s*(đ|vnđ|vnd)$/i, '');
+          if (raw !== core.formatNumber(f.price.value)) { text = '= ' + core.formatVND(f.price.value); cls = 'preview'; }
+        }
+        if (showErrors || !sub.classList.contains('warn') || !(priceBad || timesBad)) {
+          sub.textContent = text;
+          sub.className = 'row-sub' + (cls ? ' ' + cls : '');
+        }
+        row.querySelector('.item-price').setAttribute('aria-invalid', showErrors && priceBad ? 'true' : 'false');
+        row.querySelector('.freq-times').setAttribute('aria-invalid', showErrors && timesBad ? 'true' : 'false');
+      });
+
+      var r = hState.result;
+      el.hDetailList.hidden = !r;
+      el.hDetail.hidden = !r;
+      el.hEquiv.hidden = !r || !r.equivalents.length;
+      if (!r) {
+        el.hBig.textContent = '—';
+        el.hBig.classList.add('empty');
+        el.hSub.textContent = hState.hint;
+        el.hSub.classList.remove('result-text');
+        return;
+      }
+      el.hBig.classList.remove('empty');
+      setBig(el.hBig, r.duration.parts);
+      el.hDetail.textContent = '≈ ' + core.formatVND(Math.round(r.total)) + ' mỗi năm';
+      el.hEquiv.textContent = r.equivalents.length
+        ? 'Đủ mua ≈ ' + r.equivalents.map(function (e) { return e.text + ' ' + e.emoji; }).join(' hoặc ')
+        : '';
+      el.hSub.textContent = r.quip;
+      el.hSub.classList.add('result-text');
+      el.hLines.textContent = '';
+      r.habits.forEach(function (c, i) {
+        var row = document.createElement('div');
+        row.className = 'row' + (i === 0 && r.habits.length > 1 ? ' top' : '');
+        var dt = document.createElement('dt');
+        dt.textContent = core.capitalizeFirst(c.name);
+        var small = document.createElement('small');
+        small.textContent = core.formatVND(Math.round(c.yearCost)) + ' mỗi năm';
+        dt.appendChild(small);
+        var dd = document.createElement('dd');
+        dd.textContent = c.duration.text;
+        row.appendChild(dt);
+        row.appendChild(dd);
+        el.hLines.appendChild(row);
+      });
+    }
+
+    /* --- Đồng hồ kiếm tiền --- */
+    function hm(sec) {
+      var m = Math.round(sec / 60);
+      var h = Math.floor(m / 60);
+      m = m % 60;
+      return h ? h + ' giờ' + (m ? ' ' + m + ' phút' : '') : m + ' phút';
+    }
+
+    function clockInputs() {
+      var start = core.parseClock(el.clockStart.value);
+      var end = core.parseClock(el.clockEnd.value);
+      if (start === null) start = core.parseClock(CLOCK_DEFAULT.start);
+      if (end === null) end = core.parseClock(CLOCK_DEFAULT.end);
+      return { start: start, end: end };
+    }
+
+    function dailyPay() {
+      var c = workContext();
+      return c ? c.salary / c.days : null;
+    }
+
+    function renderClockStatic() {
+      renderSalaryContext(el.clockCtx);
+      var daily = dailyPay();
+      el.clockDaily.textContent = daily ? core.formatVND(Math.round(daily)) : '—';
+      el.toiletBtn.hidden = !daily;
+      tick();
+    }
+
+    function nowSeconds() {
+      var d = new Date();
+      return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000;
+    }
+
+    function tick() {
+      if (!el || el.panels.clock.hidden) return;
+      var daily = dailyPay();
+      if (!daily) {
+        el.cBig.textContent = '—';
+        el.cBig.classList.add('empty');
+        el.cBar.hidden = true;
+        el.cSub.textContent = core.evaluateHabits({ habits: [] }, null).hint;
+        el.cLabel.textContent = 'Hôm nay cậu đã kiếm';
+        return;
+      }
+      var t = clockInputs();
+      var c = core.clockState(nowSeconds(), t.start, t.end, daily);
+      el.cBig.classList.remove('empty');
+      setBig(el.cBig, [[core.formatNumber(Math.floor(c.earned)), 'đ']]);
+      el.cBar.hidden = false;
+      el.cProgress.style.width = (c.progress * 100) + '%';
+      var startText = el.clockStart.value || CLOCK_DEFAULT.start;
+      if (c.phase === 'before') {
+        el.cLabel.textContent = 'Chưa tới giờ làm';
+        el.cSticker.textContent = '😴';
+        el.cSub.textContent = 'Còn ' + hm(c.untilStart) + ' nữa mới vào làm. Ngủ thêm đi.';
+      } else if (c.phase === 'after') {
+        el.cLabel.textContent = 'Hôm nay cậu đã kiếm trọn';
+        el.cSticker.textContent = '🏁';
+        el.cSub.textContent = 'Hết giờ rồi, về thôi! ' + capitalize(core.affordable(c.earned)) + '.';
+      } else {
+        el.cLabel.textContent = 'Từ ' + startText + ' tới giờ cậu đã kiếm';
+        el.cSticker.textContent = '⏱️';
+        var can = core.affordable(c.earned);
+        el.cSub.textContent = (can ? capitalize(can) + '. ' : '') + 'Mỗi phút thêm ' + core.formatVND(Math.round(c.ratePerSec * 60)) + '.';
+      }
+      if (toilet) {
+        var sec = (Date.now() - toilet.startedAt) / 1000;
+        var mm = Math.floor(sec / 60);
+        var ss = Math.floor(sec % 60);
+        el.toiletLive.textContent = '⏱ ' + (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss +
+          ' · +' + core.formatVND(Math.round(c.ratePerSec * sec));
+      }
+    }
+
+    function capitalize(text) {
+      return text ? core.capitalizeFirst(text) : '';
+    }
+
+    function toggleToilet() {
+      var daily = dailyPay();
+      if (!daily) return;
+      if (!toilet) {
+        toilet = { startedAt: Date.now() };
+        el.toiletBtn.textContent = '✅ Xong rồi';
+        el.toiletBtn.classList.add('active');
+        el.toiletLive.hidden = false;
+        el.toiletQuip.hidden = true;
+        tick();
+        return;
+      }
+      var sec = (Date.now() - toilet.startedAt) / 1000;
+      toilet = null;
+      var t = clockInputs();
+      var c = core.clockState(nowSeconds(), t.start, t.end, daily);
+      el.toiletBtn.textContent = '🚽 Đang đi vệ sinh';
+      el.toiletBtn.classList.remove('active');
+      el.toiletLive.hidden = true;
+      el.toiletQuip.textContent = c.phase === 'working'
+        ? core.toiletQuip(sec, c.ratePerSec * sec, String(Math.round(sec)))
+        : 'Ngoài giờ làm thì đi vệ sinh không ai trả lương đâu 😅';
+      el.toiletQuip.hidden = false;
+      pop(el.toiletQuip);
     }
 
     /* --- Ảnh chia sẻ (không bao giờ có lương) --- */
@@ -1276,7 +2135,7 @@
       return lines;
     }
 
-    function drawCard(r) {
+    function drawClassic(r) {
       var W = 1080, H = 1350, PAD = 96;
       var canvas = document.createElement('canvas');
       canvas.width = W;
@@ -1364,6 +2223,223 @@
       return canvas;
     }
 
+    // Chọn cỡ chữ lớn nhất (không quá startSize) để text vừa maxWidth
+    function fitFont(ctx, text, weight, startSize, maxWidth) {
+      var size = startSize;
+      ctx.font = weight + ' ' + size + 'px ' + FONT;
+      while (size > 20 && ctx.measureText(text).width > maxWidth) {
+        size -= 2;
+        ctx.font = weight + ' ' + size + 'px ' + FONT;
+      }
+    }
+
+    function newCanvas(W, H) {
+      var canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      return canvas;
+    }
+
+    // Câu tóm tắt cách mua, chỉ những gì không lộ lương (để dành theo % lương thì không ghi)
+    function payLine(r) {
+      if (r.installment) {
+        return 'Trả góp ' + r.installment.months + ' tháng: ' + core.formatVND(r.installment.perMonth) +
+          '/tháng ≈ ' + r.installment.perDuration.text;
+      }
+      return '';
+    }
+
+    function drawReceipt(r) {
+      var W = 1080, PAD = 110;
+      var items = r.items.slice(0, 8);
+      var more = r.items.length - items.length;
+      var H = 1180 + items.length * 70 + (more ? 70 : 0) + (payLine(r) ? 70 : 0);
+      var canvas = newCanvas(W, H);
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#F3E6D6';
+      ctx.fillRect(0, 0, W, H);
+
+      // Tờ hoá đơn với mép răng cưa
+      var x0 = 70, x1 = W - 70, y0 = 70, y1 = H - 70, tooth = 22;
+      ctx.fillStyle = '#FFFDF8';
+      ctx.beginPath();
+      ctx.moveTo(x0, y0 + tooth);
+      for (var x = x0; x < x1; x += tooth * 2) { ctx.lineTo(x + tooth, y0); ctx.lineTo(Math.min(x + tooth * 2, x1), y0 + tooth); }
+      ctx.lineTo(x1, y1 - tooth);
+      for (var x2 = x1; x2 > x0; x2 -= tooth * 2) { ctx.lineTo(x2 - tooth, y1); ctx.lineTo(Math.max(x2 - tooth * 2, x0), y1 - tooth); }
+      ctx.closePath();
+      ctx.fill();
+
+      var mono = '"SF Mono", "Roboto Mono", Menlo, Consolas, monospace';
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#2A1F17';
+      ctx.font = '800 56px ' + FONT;
+      ctx.fillText('HOÁ ĐƠN GIỜ LÀM', W / 2, 210);
+      ctx.fillStyle = '#86766A';
+      ctx.font = '500 32px ' + mono;
+      var d = new Date();
+      ctx.fillText('Ngày ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear(), W / 2, 265);
+
+      function dashed(y) {
+        ctx.save();
+        ctx.strokeStyle = '#CDB8A2';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([14, 12]);
+        ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke();
+        ctx.restore();
+      }
+      function pair(left, right, y, font, color) {
+        ctx.font = font;
+        ctx.fillStyle = color || '#2A1F17';
+        ctx.textAlign = 'left';
+        var maxLeft = W - PAD * 2 - ctx.measureText(right).width - 30;
+        var l = left;
+        while (l.length > 1 && ctx.measureText(l).width > maxLeft) l = l.slice(0, -1);
+        if (l !== left) l = l.slice(0, -1) + '…';
+        ctx.fillText(l, PAD, y);
+        ctx.textAlign = 'right';
+        ctx.fillText(right, W - PAD, y);
+      }
+
+      var y = 330;
+      dashed(y);
+      y += 80;
+      items.forEach(function (it, i) {
+        pair(core.capitalizeFirst(it.name || 'Món ' + (i + 1)), core.formatVND(it.price), y, '500 40px ' + mono);
+        y += 70;
+      });
+      if (more) { pair('… và ' + more + ' món khác', '', y, '500 36px ' + mono, '#86766A'); y += 70; }
+      dashed(y - 30);
+      y += 40;
+      pair('TỔNG', core.formatVND(r.price), y, '800 46px ' + mono);
+      y += 60;
+      dashed(y);
+      y += 110;
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#86766A';
+      ctx.font = '600 36px ' + FONT;
+      ctx.fillText('QUY RA THỜI GIAN LÀM VIỆC', W / 2, y);
+      y += 130;
+      var text = r.duration.text;
+      var size = 120;
+      ctx.font = '800 ' + size + 'px ' + FONT;
+      while (size > 60 && ctx.measureText(text).width > W - PAD * 2) { size -= 4; ctx.font = '800 ' + size + 'px ' + FONT; }
+      ctx.fillStyle = '#E0571F';
+      ctx.fillText(text, W / 2, y);
+      if (payLine(r)) {
+        y += 80;
+        ctx.fillStyle = '#2A1F17';
+        fitFont(ctx, payLine(r), 500, 34, W - PAD * 2);
+        ctx.fillText(payLine(r), W / 2, y);
+      }
+      y += 100;
+      ctx.fillStyle = '#86766A';
+      ctx.font = 'italic 500 36px ' + FONT;
+      wrapLines(ctx, r.quip, W - PAD * 2, 2).forEach(function (l) { ctx.fillText(l, W / 2, y); y += 50; });
+
+      ctx.fillStyle = '#B9A58F';
+      ctx.font = '500 30px ' + mono;
+      ctx.fillText('* Cảm ơn quý khách đã đi làm *', W / 2, H - 150);
+      ctx.font = '500 26px ' + FONT;
+      ctx.fillText('Quy ra giờ làm · ảnh không chứa lương', W / 2, H - 105);
+      ctx.textAlign = 'left';
+      return canvas;
+    }
+
+    function drawStory(r) {
+      var W = 1080, H = 1920, PAD = 100;
+      var canvas = newCanvas(W, H);
+      var ctx = canvas.getContext('2d');
+      var bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, '#FF8A57');
+      bg.addColorStop(1, '#E0571F');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
+      ctx.beginPath(); ctx.arc(W - 60, 260, 340, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(80, H - 200, 260, 0, Math.PI * 2); ctx.fill();
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.font = '700 40px ' + FONT;
+      ctx.fillText('QUY RA GIỜ LÀM', W / 2, 200);
+
+      ctx.font = '220px ' + FONT;
+      ctx.fillText(r.installment ? '💳' : core.stickerFor(r.duration.kind), W / 2, 560);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '800 80px ' + FONT;
+      var y = 760;
+      wrapLines(ctx, core.capitalizeFirst(r.name || 'Món đồ này'), W - PAD * 2, 2).forEach(function (l) {
+        ctx.fillText(l, W / 2, y); y += 96;
+      });
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.font = '600 56px ' + FONT;
+      ctx.fillText(core.formatVND(r.price), W / 2, y + 10);
+      y += 150;
+      ctx.font = '500 48px ' + FONT;
+      ctx.fillText('đáng', W / 2, y);
+      y += 30;
+
+      var text = r.duration.text;
+      var size = 200;
+      ctx.font = '800 ' + size + 'px ' + FONT;
+      while (size > 90 && ctx.measureText(text).width > W - PAD * 2) { size -= 6; ctx.font = '800 ' + size + 'px ' + FONT; }
+      ctx.fillStyle = '#FFFFFF';
+      wrapLines(ctx, text, W - PAD * 2, 2).forEach(function (l) { y += size; ctx.fillText(l, W / 2, y); });
+      var k = r.duration.kind;
+      if (k === 'seconds' || k === 'minutes' || k === 'hours') {
+        y += 80;
+        ctx.font = '600 52px ' + FONT;
+        ctx.fillText('làm việc', W / 2, y);
+      }
+      if (payLine(r)) {
+        y += 90;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        fitFont(ctx, payLine(r), 500, 38, W - PAD * 2);
+        ctx.fillText(payLine(r), W / 2, y);
+      }
+
+      // Câu cợt nhả trong một nhãn trắng nghiêng nhẹ
+      ctx.save();
+      ctx.translate(W / 2, H - 420);
+      ctx.rotate(-0.03);
+      ctx.font = '600 44px ' + FONT;
+      var lines = wrapLines(ctx, r.quip, W - PAD * 2 - 80, 3);
+      var boxH = lines.length * 60 + 60;
+      ctx.fillStyle = '#FFFDF8';
+      roundRect(ctx, -(W - PAD * 2) / 2, -boxH / 2, W - PAD * 2, boxH, 36);
+      ctx.fill();
+      ctx.fillStyle = '#2A1F17';
+      lines.forEach(function (l, i) { ctx.fillText(l, 0, -boxH / 2 + 75 + i * 60); });
+      ctx.restore();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.font = '500 32px ' + FONT;
+      ctx.fillText('Món này tốn của cậu bao nhiêu giờ làm?', W / 2, H - 140);
+      ctx.textAlign = 'left';
+      return canvas;
+    }
+
+    function roundRect(ctx, x, y, w, h, rad) {
+      ctx.beginPath();
+      ctx.moveTo(x + rad, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rad);
+      ctx.arcTo(x + w, y + h, x, y + h, rad);
+      ctx.arcTo(x, y + h, x, y, rad);
+      ctx.arcTo(x, y, x + w, y, rad);
+      ctx.closePath();
+    }
+
+    function drawShare(r) {
+      if (shareTpl === 'receipt') return drawReceipt(r);
+      if (shareTpl === 'story') return drawStory(r);
+      return drawClassic(r);
+    }
+
     function canvasToBlob(canvas) {
       // toDataURL chạy đồng bộ, để navigator.share vẫn nằm trong cú bấm (Safari rất khó tính chuyện này).
       var data = canvas.toDataURL('image/png').split(',')[1];
@@ -1387,8 +2463,8 @@
 
     function share() {
       if (!state || !state.result) return;
-      var blob = canvasToBlob(drawCard(state.result));
-      var filename = 'quy-ra-gio-lam.png';
+      var blob = canvasToBlob(drawShare(state.result));
+      var filename = 'quy-ra-gio-lam-' + shareTpl + '.png';
       var file = null;
       try { file = new File([blob], filename, { type: 'image/png' }); } catch (e) { file = null; }
 
@@ -1454,20 +2530,68 @@
       updateAll(true);
     });
 
-    el.months.forEach(function (btn, i) {
-      function pick(target) {
-        installment = Number(target.getAttribute('data-months'));
-        updateAll(true);
+    radioGroup(el.pays, function (btn) { payMode = btn.getAttribute('data-pay'); updateAll(true); });
+    radioGroup(el.months, function (btn) { installment = Number(btn.getAttribute('data-months')); updateAll(true); });
+    radioGroup(el.pcts, function (btn) { savePct = Number(btn.getAttribute('data-pct')); updateAll(true); });
+    radioGroup(el.tpls, function (btn) { shareTpl = btn.getAttribute('data-tpl'); updateAll(true); });
+    radioGroup(el.modes, function (btn) {
+      var next = btn.getAttribute('data-mode');
+      // Đổi chiều tính thì đổi luôn con số trong ô, để vẫn là cùng một mức lương
+      if (next !== 'offers' && next !== calcMode) {
+        if (gState.result) gInputs.gross.value = core.formatNumber(next === 'net' ? gState.result.net : gState.result.gross);
+        calcMode = next;
       }
-      btn.addEventListener('click', function () { pick(btn); });
-      btn.addEventListener('keydown', function (e) {
-        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-        e.preventDefault();
-        var next = el.months[(i + (e.key === 'ArrowRight' ? 1 : el.months.length - 1)) % el.months.length];
-        pick(next);
-        next.focus();
+      grossMode = next;
+      salaryLinked = true;
+      updateAll(true);
+      save();
+    });
+
+    el.offerInputs.forEach(function (input) {
+      var o = offers[input.getAttribute('data-offer')];
+      var key = input.getAttribute('data-key');
+      input.addEventListener('input', function () { o[key] = input.value; updateAll(false); });
+      input.addEventListener('change', function () {
+        var f = oState.fields[input.getAttribute('data-offer')][key];
+        if ((key === 'gross' || key === 'allowance') && f && f.state === 'ok' && f.value) {
+          input.value = core.formatNumber(f.value);
+          o[key] = input.value;
+        }
+        updateAll(true);
       });
     });
+
+    el.habitChips.addEventListener('click', function (e) {
+      var chip = e.target.closest('[data-habit]');
+      if (!chip) return;
+      // Như giỏ hàng: điền vào dòng trống giá, không tự điền giá
+      var idx = -1;
+      for (var i = habits.length - 1; i >= 0; i--) {
+        if (!habits[i].price.trim()) { idx = i; break; }
+      }
+      if (idx === -1) { habits.push({ name: '', price: '', times: '1', per: 'week' }); idx = habits.length - 1; }
+      habits[idx].name = chip.getAttribute('data-habit');
+      habits[idx].times = chip.getAttribute('data-times');
+      habits[idx].per = chip.getAttribute('data-per');
+      habits[idx].price = '';
+      renderHabits(idx, 'price');
+      updateAll(true);
+      save();
+    });
+
+    el.habits.addEventListener('click', function (e) {
+      if (!e.target.closest('.add-row')) return;
+      habits.push({ name: '', price: '', times: '1', per: 'week' });
+      renderHabits(habits.length - 1, 'name');
+      updateAll(true);
+    });
+
+    [el.clockStart, el.clockEnd].forEach(function (input) {
+      input.addEventListener('input', function () { tick(); save(); });
+      input.addEventListener('change', function () { tick(); save(); });
+    });
+    el.toiletBtn.addEventListener('click', toggleToilet);
+    setInterval(tick, 250);
 
     el.tabs.forEach(function (tab, i) {
       tab.addEventListener('click', function () { showTab(tab.getAttribute('data-tab')); save(); });
@@ -1479,12 +2603,13 @@
       });
     });
 
-    $all('[data-go]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        showTab(btn.getAttribute('data-go'));
-        save();
-        window.scrollTo(0, 0);
-      });
+    // Có cả nút data-go tạo động (dòng "Dựa trên lương…"), nên bắt sự kiện ở cấp tài liệu
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-go]');
+      if (!btn) return;
+      showTab(btn.getAttribute('data-go'));
+      save();
+      window.scrollTo(0, 0);
     });
 
     function setDependents(n) {
@@ -1538,8 +2663,9 @@
     el.clear.addEventListener('click', clearSaved);
 
     function tabFromHash() {
-      if (location.hash === '#net' || location.hash === '#gross') return 'gross';
-      if (location.hash === '#time') return 'time';
+      var h = location.hash.slice(1);
+      if (h === 'gross') return 'gross';
+      for (var key in HASHES) if (HASHES[key] === h) return key;
       return null;
     }
     window.addEventListener('hashchange', function () {
@@ -1549,6 +2675,7 @@
 
     renderCart();
     var savedTab = load();
+    renderHabits();
     var hashTab = tabFromHash();
     // Lần đầu: bắt đầu từ tính lương thực nhận. Đã có lương thực nhận thì vào thẳng quy giờ làm.
     showTab(hashTab || savedTab || (inputs.salary.value.trim() ? 'time' : 'gross'));

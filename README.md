@@ -1,12 +1,14 @@
 # Quy ra giờ làm
 
-Hai công cụ trong một trang:
+Bốn tab trong một trang:
 
-- **Quy ra giờ làm**: nhập lương thực nhận và một hoặc nhiều món (giỏ hàng), trang quy tổng giá ra thời gian làm việc,
-  kèm tuỳ chọn trả góp 0% (mỗi tháng tốn bao nhiêu giờ làm) và quy đổi ra đồ đời thường với giá ước chừng.
-  "À, hoá ra ly cà phê này tốn của mình 32 phút làm việc."
-- **Lương thực nhận**: nhập lương gross, trang trừ bảo hiểm (BHXH 8%, BHYT 1,5%, BHTN 1%) và thuế TNCN
-  (biểu 5 bậc, Luật 109/2025/QH15), rồi cộng phụ cấp miễn thuế trả ngoài gross, để ra lương thực nhận ước tính.
+- **Lương**: gross → thực nhận (trừ BHXH 8%, BHYT 1,5%, BHTN 1%, thuế TNCN biểu 5 bậc theo Luật 109/2025/QH15,
+  cộng phụ cấp miễn thuế), tính ngược net → gross để đi deal lương, và so sánh 2 offer theo lương thực nhận mỗi giờ.
+- **Mua sắm**: giỏ một hoặc nhiều món quy ra thời gian làm việc; trả thẳng, trả góp 0% (mỗi tháng tốn bao nhiêu giờ làm)
+  hoặc để dành theo % lương (bao lâu mới mua được); quy đổi ra đồ đời thường; chia sẻ ảnh 3 mẫu (thẻ, hoá đơn, story),
+  không bao giờ có lương trong ảnh.
+- **Thói quen**: mấy món nhỏ lặp lại (trà sữa 3 lần/tuần, Netflix 1 lần/tháng…) mỗi năm ngốn bao nhiêu ngày công.
+- **Đồng hồ**: tiền kiếm được hôm nay nhảy theo từng giây, kèm nút "Đang đi vệ sinh 🚽".
 
 Web tĩnh hoàn toàn: HTML + CSS + JS thuần, không framework, không bước build, không gọi mạng.
 Lương chỉ nằm trong trình duyệt (CSP trong `index.html` chặn mọi request ra ngoài).
