@@ -173,11 +173,8 @@ Người dùng đã đổi ý nhiều lần; trạng thái hiện tại là kế
 
 - **Chỉ một nhánh: `main`.** Làm việc, commit và push thẳng lên `main`; không tạo nhánh tính năng, không mở PR,
   không chờ người dùng merge tay (người dùng đã yêu cầu rõ). Trước khi push: `node test.js` qua, kiểm tra trình duyệt xong.
-- **GitHub Pages** lấy trang từ `main` / thư mục gốc. Theo dõi build qua API công khai
-  `https://api.github.com/repos/duongidle/quy-ra-gio-lam/actions/runs?branch=main&per_page=1`.
-  Trang: https://duongidle.github.io/quy-ra-gio-lam/
-  (Trước đây Pages lấy từ nhánh `gh-pages`; nhánh đó chỉ được xoá sau khi cài đặt Pages đã chuyển sang `main`.)
-- **Cloudflare Pages** (https://quyragiolam.pages.dev): người dùng **không muốn nối Git** (lo tốn giới hạn build).
+- **Không dùng GitHub Pages** (người dùng đã bỏ). Đừng tạo lại nhánh `gh-pages` hay bật Pages.
+- **Cloudflare Pages** (https://quyragiolam.pages.dev) là nơi duy nhất trang chạy. Người dùng **không muốn nối Git** (lo tốn giới hạn build).
   Dùng Direct Upload: đóng gói đúng 4 file `index.html style.css app.js _headers` thành zip (không kèm `test.js`,
   `README.md`, `CLAUDE.md`) và gửi cho người dùng kéo thả vào dự án → Create new deployment. Môi trường không có token Cloudflare.
 - Commit message tiếng Anh, mô tả lý do; không ghi tên model.
@@ -186,5 +183,5 @@ Người dùng đã đổi ý nhiều lần; trạng thái hiện tại là kế
 
 - Người dùng nói tiếng Việt, thích câu trả lời ngắn, thẳng, có giọng thân thiện.
 - Khi người dùng chê giao diện mà không rõ muốn gì, đưa 2–3 phương án có xem trước (preview) thay vì đoán rồi làm lại cả trang.
-- Sau mỗi thay đổi: push lên `main` (GitHub Pages tự cập nhật), gửi zip mới cho Cloudflare, nói rõ cái gì đã kiểm tra và cái gì chưa chắc.
+- Sau mỗi thay đổi: push lên `main`, gửi zip mới cho Cloudflare, nói rõ cái gì đã kiểm tra và cái gì chưa chắc.
 - Ý tưởng đã bàn cho tab Dữ liệu (chưa làm, chờ người dùng): người dùng nói "sau này sẽ làm thêm vài chức năng thú vị" ở tab này.

@@ -32,8 +32,7 @@ Mở thẳng `index.html` bằng `file://` cũng chạy được.
 
 ## Deploy
 
-- **GitHub Pages**: Settings → Pages → Source: *Deploy from a branch* → chọn branch và thư mục `/ (root)`.
-- **Cloudflare Pages**: Workers & Pages → Create → Pages → Connect to Git → chọn repo → Framework preset: *None*,
-  Build command để trống, Build output directory: `/`. File `_headers` gắn CSP và vài header bảo mật khi chạy trên Cloudflare.
+Trang chạy trên Cloudflare Pages (https://quyragiolam.pages.dev) bằng Direct Upload: nén `index.html`, `style.css`,
+`app.js`, `_headers` thành zip rồi kéo thả vào dự án → Create new deployment. Không cần bước build.
 
 Khi sửa `style.css` hoặc `app.js`, tăng số `?v=` trong `index.html` để trình duyệt không dùng bản cũ trong cache.
