@@ -359,5 +359,25 @@ test('lương đóng BH lớn hơn gross hoặc gõ linh tinh -> báo', () => {
   noBadNumbers(evg({ insuranceBase: 'abc' }));
 });
 
+test('phụ cấp miễn thuế: cộng vào thực nhận, không đóng BH, không tính thuế', () => {
+  const g = Q.grossToNet({ gross: 30000000, allowance: 730000 });
+  assert.equal(g.insurance, 3150000);
+  assert.equal(g.tax, 635000);
+  assert.equal(g.net, 26215000 + 730000);
+  const out = evg({ allowance: '730k' });
+  assert.equal(out.result.net, 26945000);
+  assert.equal(out.result.allowance, 730000);
+});
+
+test('phụ cấp trống = 0, gõ sai -> báo, không kết quả', () => {
+  assert.equal(evg({ allowance: '' }).result.allowance, 0);
+  const bad = evg({ allowance: 'abc' });
+  assert.equal(bad.fields.allowance.state, 'invalid');
+  assert.equal(bad.result, null);
+  assert.ok(bad.hint);
+  assert.equal(evg({ allowance: '-5k' }).fields.allowance.state, 'invalid');
+  noBadNumbers(bad);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

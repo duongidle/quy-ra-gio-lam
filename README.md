@@ -4,8 +4,8 @@ Hai công cụ trong một trang:
 
 - **Quy ra giờ làm**: nhập lương thực nhận và một món đồ, trang quy giá món đồ ra thời gian làm việc.
   "À, hoá ra ly cà phê này tốn của mình 32 phút làm việc."
-- **Gross → Net**: nhập lương gross, trang trừ bảo hiểm (BHXH 8%, BHYT 1,5%, BHTN 1%) và thuế TNCN
-  (biểu 5 bậc, Luật 109/2025/QH15) để ra lương thực nhận ước tính.
+- **Lương thực nhận**: nhập lương gross, trang trừ bảo hiểm (BHXH 8%, BHYT 1,5%, BHTN 1%) và thuế TNCN
+  (biểu 5 bậc, Luật 109/2025/QH15), rồi cộng phụ cấp miễn thuế trả ngoài gross, để ra lương thực nhận ước tính.
 
 Web tĩnh hoàn toàn: HTML + CSS + JS thuần, không framework, không bước build, không gọi mạng.
 Lương chỉ nằm trong trình duyệt (CSP trong `index.html` chặn mọi request ra ngoài).

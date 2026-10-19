@@ -7,211 +7,156 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <title>Quy ra giờ làm</title>
-  <meta name="description" content="Tính lương thực nhận từ lương gross, và quy giá món đồ cậu muốn mua ra thời gian làm việc. Mọi thứ chỉ nằm trên máy cậu.">
-  <meta name="theme-color" content="#FBF4EA" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1A1511" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Tính lương thực nhận từ lương gross, và quy giá món đồ ra thời gian làm việc. Mọi thứ chỉ nằm trên máy cậu.">
+  <meta name="theme-color" content="#F7F3EE" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#171310" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%23FDE6D8' stroke='%23D9531E' stroke-width='6'/%3E%3Cpath d='M32 18v14l10 6' fill='none' stroke='%23D9531E' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
   <!-- Đổi ?v= mỗi lần sửa CSS/JS để trình duyệt không dùng bản cũ trong cache -->
-  <link rel="stylesheet" href="style.css?v=3">
-  <script src="app.js?v=3" defer></script>
+  <link rel="stylesheet" href="style.css?v=5">
+  <script src="app.js?v=6" defer></script>
 </head>
 <body>
   <main class="wrap">
     <header class="top">
-      <svg class="clock" viewBox="0 0 48 48" aria-hidden="true">
-        <circle class="face" cx="24" cy="24" r="19" stroke-width="4"/>
-        <line class="hand hand-long" x1="24" y1="24" x2="24" y2="11" stroke-width="4" stroke-linecap="round"/>
-        <line class="hand hand-short" x1="24" y1="24" x2="31" y2="28" stroke-width="4" stroke-linecap="round"/>
-        <circle class="pin" cx="24" cy="24" r="2.5"/>
-      </svg>
-      <div>
-        <h1>Quy ra giờ làm</h1>
-        <p class="tagline">Món này tốn của cậu bao nhiêu giờ làm?</p>
+      <h1>Quy ra giờ làm</h1>
+      <div class="tabs" role="tablist" aria-label="Công cụ">
+        <button type="button" role="tab" id="tab-gross" data-tab="gross" aria-controls="panel-gross" aria-selected="true">Lương thực nhận</button>
+        <button type="button" role="tab" id="tab-time" data-tab="time" aria-controls="panel-time" aria-selected="false" tabindex="-1">Quy ra giờ làm</button>
       </div>
     </header>
 
-    <div class="tabs" role="tablist" aria-label="Công cụ">
-      <button type="button" role="tab" id="tab-time" data-tab="time" aria-controls="panel-time" aria-selected="true">
-        <span aria-hidden="true">⏱️</span> Quy ra giờ làm
-      </button>
-      <button type="button" role="tab" id="tab-gross" data-tab="gross" aria-controls="panel-gross" aria-selected="false" tabindex="-1">
-        <span aria-hidden="true">💰</span> Gross → Net
-      </button>
-    </div>
-
-    <!-- ============ Tab 1: Quy ra giờ làm ============ -->
-    <section id="panel-time" role="tabpanel" aria-labelledby="tab-time">
-      <form class="card" novalidate autocomplete="off">
-        <div class="field">
-          <div class="label-row">
-            <label for="salary">Lương thực nhận / tháng</label>
-            <span class="preview" id="salary-preview" hidden></span>
-          </div>
-          <div class="money">
-            <input id="salary" type="text" inputmode="text" enterkeyhint="next"
-                   placeholder="vd: 15tr" aria-describedby="salary-note salary-msg"
-                   spellcheck="false" autocapitalize="off">
-            <span class="suffix" aria-hidden="true">đ</span>
-          </div>
-          <p class="note" id="salary-note">Sau thuế và bảo hiểm.
-            <button type="button" class="link-btn" data-go="gross">Chỉ biết lương gross? Tính ở đây →</button></p>
-          <p class="msg" id="salary-msg" role="alert" hidden></p>
+    <!-- ============ Lương thực nhận (gross → net) ============ -->
+    <section id="panel-gross" role="tabpanel" aria-labelledby="tab-gross">
+      <div class="hero" aria-live="polite">
+        <p class="hero-label">Thực nhận mỗi tháng</p>
+        <p class="hero-value"><span id="g-net">—</span></p>
+        <div class="bar" id="g-bar" aria-hidden="true" hidden>
+          <span class="b-net" id="bar-net"></span><span class="b-ins" id="bar-ins"></span><span class="b-tax" id="bar-tax"></span>
         </div>
+        <p class="hero-sub" id="g-sub">Nhập lương gross bên dưới để xem.</p>
+      </div>
 
-        <details class="sched" id="sched">
-          <summary><span id="sched-summary">22 ngày/tháng · 8 giờ/ngày</span><span class="edit">Sửa</span></summary>
+      <form class="group" novalidate autocomplete="off">
+        <h2 class="group-title">Thu nhập</h2>
+        <div class="list">
+          <label class="row" for="gross">
+            <span class="row-main">
+              <span class="row-label">Lương gross</span>
+              <span class="row-sub" id="gross-sub" data-default="Trước thuế và bảo hiểm"></span>
+            </span>
+            <span class="row-input money"><input id="gross" type="text" inputmode="text" placeholder="30tr"
+              spellcheck="false" autocapitalize="off" enterkeyhint="next" aria-describedby="gross-sub"></span>
+          </label>
+          <label class="row" for="allowance">
+            <span class="row-main">
+              <span class="row-label">Phụ cấp miễn thuế</span>
+              <span class="row-sub" id="allowance-sub" data-default="Ăn trưa, xăng xe… ngoài gross"></span>
+            </span>
+            <span class="row-input money"><input id="allowance" type="text" inputmode="text" placeholder="0"
+              spellcheck="false" autocapitalize="off" enterkeyhint="next" aria-describedby="allowance-sub"></span>
+          </label>
           <div class="row">
-            <div class="field">
-              <label for="days">Ngày làm / tháng</label>
-              <input id="days" type="text" inputmode="decimal" enterkeyhint="next" value="22" aria-describedby="days-msg">
-              <p class="msg" id="days-msg" role="alert" hidden></p>
-            </div>
-            <div class="field">
-              <label for="hours">Giờ làm / ngày</label>
-              <input id="hours" type="text" inputmode="decimal" enterkeyhint="next" value="8" aria-describedby="hours-msg">
-              <p class="msg" id="hours-msg" role="alert" hidden></p>
-            </div>
-          </div>
-        </details>
-
-        <hr class="divider">
-
-        <p class="group-title">Muốn mua gì nào?</p>
-        <div class="chips" id="chips" role="group" aria-label="Gợi ý nhanh tên món">
-          <button type="button" class="chip" data-name="Ly cà phê">☕ Cà phê</button>
-          <button type="button" class="chip" data-name="Ly trà sữa">🧋 Trà sữa</button>
-          <button type="button" class="chip" data-name="Tô phở">🍜 Tô phở</button>
-          <button type="button" class="chip" data-name="Lần đổ xăng">⛽ Đổ xăng</button>
-          <button type="button" class="chip" data-name="Vé xem phim">🎬 Xem phim</button>
-          <button type="button" class="chip" data-name="Bữa lẩu">🍲 Bữa lẩu</button>
-          <button type="button" class="chip" data-name="Đôi giày mới">👟 Giày mới</button>
-          <button type="button" class="chip" data-name="iPhone mới">📱 iPhone</button>
-          <button type="button" class="chip" data-name="Chuyến du lịch">✈️ Du lịch</button>
-          <button type="button" class="chip" data-name="Căn nhà">🏠 Mua nhà</button>
-        </div>
-
-        <div class="row item-row">
-          <div class="field">
-            <label for="name">Món <span class="optional">(tuỳ chọn)</span></label>
-            <input id="name" type="text" enterkeyhint="next" maxlength="60" placeholder="Ly cà phê">
-          </div>
-          <div class="field">
-            <div class="label-row">
-              <label for="price">Giá</label>
-              <span class="preview" id="price-preview" hidden></span>
-            </div>
-            <div class="money">
-              <input id="price" type="text" inputmode="text" enterkeyhint="done"
-                     placeholder="45k" aria-describedby="price-msg" spellcheck="false" autocapitalize="off">
-              <span class="suffix" aria-hidden="true">đ</span>
-            </div>
-          </div>
-        </div>
-        <p class="msg" id="price-msg" role="alert" hidden></p>
-      </form>
-
-      <section class="result" aria-label="Kết quả">
-        <p class="result-hint" id="result-hint" aria-live="polite"></p>
-        <div id="result-body" hidden>
-          <p class="result-label">Món này tốn của cậu</p>
-          <p class="big" id="big"></p>
-          <p class="detail" id="detail" hidden></p>
-          <p class="months" id="months" hidden></p>
-          <p class="sentence" id="sentence" aria-live="polite"></p>
-          <p class="quip" id="quip"></p>
-          <button type="button" class="primary-btn" id="share" disabled>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Chia sẻ
-          </button>
-          <p class="fine">Ảnh chỉ có tên món, giá và thời gian. Không có lương.</p>
-        </div>
-        <p class="rate" id="rate" hidden></p>
-      </section>
-    </section>
-
-    <!-- ============ Tab 2: Gross → Thực nhận ============ -->
-    <section id="panel-gross" role="tabpanel" aria-labelledby="tab-gross" hidden>
-      <form class="card" novalidate autocomplete="off">
-        <div class="field">
-          <div class="label-row">
-            <label for="gross">Lương gross / tháng</label>
-            <span class="preview" id="gross-preview" hidden></span>
-          </div>
-          <div class="money">
-            <input id="gross" type="text" inputmode="text" enterkeyhint="done"
-                   placeholder="vd: 30tr" aria-describedby="gross-note gross-msg"
-                   spellcheck="false" autocapitalize="off">
-            <span class="suffix" aria-hidden="true">đ</span>
-          </div>
-          <p class="note" id="gross-note">Con số trên hợp đồng, trước khi trừ bảo hiểm và thuế.</p>
-          <p class="msg" id="gross-msg" role="alert" hidden></p>
-        </div>
-
-        <div class="row">
-          <div class="field">
-            <span class="label" id="dep-label">Người phụ thuộc</span>
-            <div class="stepper" role="group" aria-labelledby="dep-label">
+            <span class="row-main"><span class="row-label" id="dep-label">Người phụ thuộc</span></span>
+            <span class="stepper" role="group" aria-labelledby="dep-label">
               <button type="button" id="dep-minus" aria-label="Bớt một người">−</button>
               <output id="dep-value" aria-live="polite">0</output>
               <button type="button" id="dep-plus" aria-label="Thêm một người">+</button>
-            </div>
+            </span>
           </div>
-          <div class="field">
-            <span class="label" id="region-label">Vùng lương</span>
-            <div class="seg" role="radiogroup" aria-labelledby="region-label">
+          <div class="row">
+            <span class="row-main"><span class="row-label" id="region-label">Vùng lương</span></span>
+            <span class="seg" role="radiogroup" aria-labelledby="region-label">
               <button type="button" role="radio" data-region="1" aria-checked="true" aria-label="Vùng I">I</button>
               <button type="button" role="radio" data-region="2" aria-checked="false" aria-label="Vùng II" tabindex="-1">II</button>
               <button type="button" role="radio" data-region="3" aria-checked="false" aria-label="Vùng III" tabindex="-1">III</button>
               <button type="button" role="radio" data-region="4" aria-checked="false" aria-label="Vùng IV" tabindex="-1">IV</button>
-            </div>
+            </span>
           </div>
+          <label class="row" for="insurance-base">
+            <span class="row-main">
+              <span class="row-label">Lương đóng BH</span>
+              <span class="row-sub" id="insurance-base-sub" data-default="Để trống nếu bằng gross"></span>
+            </span>
+            <span class="row-input money"><input id="insurance-base" type="text" inputmode="text" placeholder="= gross"
+              spellcheck="false" autocapitalize="off" enterkeyhint="done" aria-describedby="insurance-base-sub"></span>
+          </label>
         </div>
-
-        <details class="adv" id="adv">
-          <summary>Công ty đóng bảo hiểm theo mức thấp hơn gross?</summary>
-          <div class="field">
-            <div class="label-row">
-              <label for="insurance-base">Lương đóng bảo hiểm</label>
-              <span class="preview" id="insurance-base-preview" hidden></span>
-            </div>
-            <div class="money">
-              <input id="insurance-base" type="text" inputmode="text" enterkeyhint="done"
-                     placeholder="Để trống = bằng gross" aria-describedby="insurance-base-msg"
-                     spellcheck="false" autocapitalize="off">
-              <span class="suffix" aria-hidden="true">đ</span>
-            </div>
-            <p class="msg" id="insurance-base-msg" role="alert" hidden></p>
-          </div>
-        </details>
       </form>
 
-      <section class="result" aria-label="Lương thực nhận">
-        <p class="result-hint" id="g-hint" aria-live="polite"></p>
-        <div id="g-body" hidden>
-          <p class="result-label">Thực nhận mỗi tháng</p>
-          <p class="big money-big"><span class="num" id="g-net"></span><span class="unit">đ</span></p>
-          <p class="detail" id="g-ratio"></p>
-
-          <div class="bar" aria-hidden="true">
-            <span class="seg-net" id="bar-net"></span><span class="seg-ins" id="bar-ins"></span><span class="seg-tax" id="bar-tax"></span>
-          </div>
-          <ul class="legend" id="g-legend"></ul>
-
-          <details class="lines-wrap">
-            <summary>Xem cách tính</summary>
-            <dl class="lines" id="g-lines"></dl>
-          </details>
-
-          <button type="button" class="primary-btn" id="use-net">Quy ra giờ làm với lương này →</button>
-          <p class="fine">Ước tính theo Luật Thuế TNCN 109/2025/QH15 (biểu 5 bậc; giảm trừ 15,5tr cho bản thân,
-            6,2tr mỗi người phụ thuộc) và mức đóng BHXH 8%, BHYT 1,5%, BHTN 1% với trần từ 1/7/2026.
-            Chưa tính phụ cấp miễn thuế, đoàn phí… nên phiếu lương thật có thể lệch một chút.</p>
-        </div>
+      <section class="group" id="g-detail" hidden>
+        <h2 class="group-title">Chi tiết</h2>
+        <dl class="list" id="g-lines"></dl>
       </section>
+
+      <button type="button" class="primary-btn" id="use-net" hidden>Quy ra giờ làm với lương này →</button>
+      <p class="fine">Ước tính theo Luật Thuế TNCN 109/2025/QH15: biểu 5 bậc, giảm trừ 15,5tr cho bản thân và 6,2tr
+        mỗi người phụ thuộc. Bảo hiểm người lao động đóng 10,5% với mức trần từ 1/7/2026. Phiếu lương thật có thể lệch
+        một chút nếu công ty có khoản trừ khác.</p>
+    </section>
+
+    <!-- ============ Quy ra giờ làm ============ -->
+    <section id="panel-time" role="tabpanel" aria-labelledby="tab-time" hidden>
+      <div class="hero" aria-live="polite">
+        <p class="hero-label">Món này tốn của cậu</p>
+        <p class="hero-value" id="big">—</p>
+        <p class="hero-detail" id="detail" hidden></p>
+        <p class="hero-sub" id="sentence">Nhập lương và giá món đồ bên dưới.</p>
+        <button type="button" class="share-btn" id="share" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Chia sẻ ảnh (không có lương)
+        </button>
+      </div>
+
+      <form class="group" novalidate autocomplete="off">
+        <h2 class="group-title">Món đồ</h2>
+        <div class="list">
+          <label class="row" for="name">
+            <span class="row-main"><span class="row-label">Tên món</span>
+              <span class="row-sub" id="name-sub" data-default="Không bắt buộc"></span></span>
+            <span class="row-input"><input id="name" type="text" list="item-ideas" maxlength="60" placeholder="Ly cà phê" enterkeyhint="next"></span>
+          </label>
+          <label class="row" for="price">
+            <span class="row-main"><span class="row-label">Giá</span>
+              <span class="row-sub" id="price-sub" data-default=""></span></span>
+            <span class="row-input money"><input id="price" type="text" inputmode="text" placeholder="45k"
+              spellcheck="false" autocapitalize="off" enterkeyhint="done" aria-describedby="price-sub"></span>
+          </label>
+        </div>
+        <datalist id="item-ideas">
+          <option value="Ly cà phê"><option value="Ly trà sữa"><option value="Tô phở"><option value="Lần đổ xăng">
+          <option value="Vé xem phim"><option value="Bữa lẩu"><option value="Đôi giày mới"><option value="iPhone mới">
+          <option value="Chuyến du lịch"><option value="Căn nhà">
+        </datalist>
+
+        <h2 class="group-title">Lương của cậu</h2>
+        <div class="list">
+          <label class="row" for="salary">
+            <span class="row-main"><span class="row-label">Thực nhận / tháng</span>
+              <span class="row-sub" id="salary-sub" data-default="Sau thuế và bảo hiểm"></span></span>
+            <span class="row-input money"><input id="salary" type="text" inputmode="text" placeholder="15tr"
+              spellcheck="false" autocapitalize="off" enterkeyhint="next" aria-describedby="salary-sub"></span>
+          </label>
+          <label class="row" for="days">
+            <span class="row-main"><span class="row-label">Ngày làm / tháng</span>
+              <span class="row-sub" id="days-sub" data-default=""></span></span>
+            <span class="row-input short"><input id="days" type="text" inputmode="decimal" value="22" enterkeyhint="next" aria-describedby="days-sub"></span>
+          </label>
+          <label class="row" for="hours">
+            <span class="row-main"><span class="row-label">Giờ làm / ngày</span>
+              <span class="row-sub" id="hours-sub" data-default=""></span></span>
+            <span class="row-input short"><input id="hours" type="text" inputmode="decimal" value="8" enterkeyhint="done" aria-describedby="hours-sub"></span>
+          </label>
+          <div class="row readonly">
+            <span class="row-main"><span class="row-label">Lương mỗi giờ</span></span>
+            <span class="row-value" id="rate">—</span>
+          </div>
+        </div>
+        <p class="group-foot">Chỉ biết lương gross? <button type="button" class="link-btn" data-go="gross">Tính thực nhận trước</button></p>
+      </form>
     </section>
 
     <footer class="foot">
-      <p id="storage-note">🔒 Không máy chủ, không theo dõi. Lương chỉ lưu trên máy này để lần sau đỡ gõ lại.</p>
+      <p id="storage-note">Không máy chủ, không theo dõi. Số liệu chỉ lưu trên máy này.</p>
       <button type="button" id="clear" class="link-btn">Xoá dữ liệu đã lưu</button>
     </footer>
   </main>
