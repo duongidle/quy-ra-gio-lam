@@ -417,5 +417,226 @@ test('câu bình luận theo thời gian: đủ mọi mức, ổn định theo h
   Q.TIME_QUIPS.concat(Q.TAX_QUIPS).forEach((b) => assert.ok(b.lines.length >= 3));
 });
 
+/* ---------- Giỏ hàng ---------- */
+const evc = (items, patch) => Q.evaluate(Object.assign({ salary: '15tr', days: '22', hours: '8', items }, patch));
+
+test('giỏ nhiều món: cộng tổng, câu nói về giỏ', () => {
+  const out = evc([{ name: 'Ly cà phê', price: '45k' }, { name: 'Tô phở', price: '60k' }, { name: 'Vé xem phim', price: '120k' }]);
+  assert.equal(out.result.price, 225000);
+  assert.equal(out.result.count, 3);
+  assert.equal(out.result.name, 'Giỏ 3 món');
+  assert.match(out.result.sentence, /^Giỏ 3 món 225\.000đ này đáng .+ của cậu\.$/);
+  noBadNumbers(out);
+});
+
+test('giỏ: bỏ qua dòng chưa có giá, báo dòng gõ sai', () => {
+  const ok = evc([{ name: 'Ly cà phê', price: '45k' }, { name: 'Tô phở', price: '' }]);
+  assert.equal(ok.result.price, 45000);
+  assert.equal(ok.result.count, 1);
+  assert.match(ok.result.sentence, /^Ly cà phê 45\.000đ/);
+  const bad = evc([{ name: 'Ly cà phê', price: '45k' }, { name: 'Tô phở', price: 'abc' }]);
+  assert.equal(bad.result, null);
+  assert.equal(bad.fields.items[1].state, 'invalid');
+  assert.match(bad.hint, /chưa đọc được giá/);
+  const empty = evc([{ name: '', price: '' }, { name: 'x', price: '' }]);
+  assert.equal(empty.result, null);
+  assert.match(empty.hint, /nhập giá/);
+  noBadNumbers(bad);
+});
+
+test('giỏ: tổng quá lớn thì báo, không NaN/Infinity', () => {
+  const out = evc([{ name: 'a', price: '900000 tỷ' }, { name: 'b', price: '900000 tỷ' }]);
+  assert.equal(out.result, null);
+  assert.ok(out.hint);
+  noBadNumbers(out);
+});
+
+/* ---------- Trả góp ---------- */
+test('trả góp 12 tháng: chia đều, số to theo tháng', () => {
+  const out = evc([{ name: 'iPhone mới', price: '30tr' }], { installment: 12 });
+  const i = out.result.installment;
+  assert.equal(i.months, 12);
+  assert.equal(i.perMonth, 2500000);
+  assert.ok(Math.abs(i.share - 2500000 / 15000000) < 1e-9);
+  assert.equal(i.perDuration.text, Q.formatDuration(out.result.minutes / 12, 8, 22).text);
+  assert.match(out.result.sentence, /^Trả góp 12 tháng: mỗi tháng 2\.500\.000đ, đáng .+ của cậu\.$/);
+  assert.ok(Q.INSTALLMENT_QUIPS[2].lines.some((l) => out.result.quip === l.replace('{per}', i.perDuration.text).replace('{n}', '12')), out.result.quip);
+  assert.equal(out.result.price, 30000000); // tổng vẫn giữ để chia sẻ ảnh
+  noBadNumbers(out);
+});
+
+test('trả góp: không bật thì không có, câu theo đúng mức', () => {
+  assert.equal(evc([{ name: 'x', price: '1tr' }]).result.installment, null);
+  assert.equal(evc([{ name: 'x', price: '1tr' }], { installment: 0 }).result.installment, null);
+  const levels = [[0.01, 0], [0.1, 1], [0.2, 2], [0.5, 3], [1.5, 4]];
+  for (const [share, k] of levels) {
+    const text = Q.installmentQuip(share, '2 ngày làm việc', 12, 'seed');
+    assert.ok(Q.INSTALLMENT_QUIPS[k].lines.map((l) => l.replace('{per}', '2 ngày làm việc').replace('{n}', '12')).includes(text), text);
+    assert.ok(!/[{}]/.test(text));
+  }
+});
+
+/* ---------- Quy ra đồ đời thường ---------- */
+test('quy đổi: tối đa 2 món, số lượng dễ hình dung, có ghi giá dùng để so', () => {
+  const eq = Q.equivalents(1000000, 'Tai nghe');
+  assert.ok(eq.length >= 1 && eq.length <= 2);
+  for (const e of eq) {
+    assert.ok(e.count >= 1.5 && e.count <= 999, e.text);
+    assert.match(e.priceNote, /\d/);
+  }
+  assert.equal(eq.length, 2);
+  assert.notEqual(eq[0].text, eq[1].text);
+  assert.deepEqual(Q.equivalents(1000000, 'Tai nghe'), eq); // ổn định
+});
+
+test('quy đổi: không so món với chính nó, quá rẻ thì bỏ', () => {
+  const eq = Q.equivalents(350000, 'Ly cà phê');
+  assert.ok(eq.length && eq.every((e) => !/cà phê/.test(e.text)), JSON.stringify(eq));
+  assert.deepEqual(Q.equivalents(5000, 'x'), []);
+  assert.ok(Q.equivalents(900e9, 'x').length >= 1);
+  // 1,3tr: chọn vé phim và phở chứ không phải 261 cốc trà đá
+  assert.deepEqual(Q.equivalents(1305000, 'x').map((e) => e.text), ['26 tô phở', '13 vé xem phim']); // 900 tỷ vẫn quy ra được căn chung cư
+  const r = evc([{ name: 'Bữa lẩu', price: '800k' }]).result;
+  assert.ok(Array.isArray(r.equivalents) && r.equivalents.length > 0);
+});
+
+/* ---------- Net → Gross ---------- */
+test('net → gross: dò ngược khớp với gross → net', () => {
+  assert.equal(Q.netToGross({ net: 26215000 }), 30000000);
+  for (const net of [8e6, 15e6, 20e6, 35e6, 80e6, 200e6]) {
+    for (const dependents of [0, 2]) {
+      const g = Q.netToGross({ net, dependents, region: 1 });
+      const got = Q.grossToNet({ gross: g, dependents, region: 1 }).net;
+      assert.ok(got >= net, `${net}: ${got}`);
+      assert.ok(Q.grossToNet({ gross: g - 1000, dependents, region: 1 }).net < net, 'không xin dư quá 1.000đ');
+    }
+  }
+});
+
+test('net → gross: tính cả phụ cấp, phụ cấp đủ thì báo', () => {
+  const g = Q.netToGross({ net: 20730000, allowance: 730000 });
+  assert.equal(g, Q.netToGross({ net: 20000000 }));
+  const out = Q.evaluateGross({ mode: 'net', gross: '500k', allowance: '730k', dependents: 0, region: '1' });
+  assert.equal(out.result, null);
+  assert.match(out.hint, /Phụ cấp đã đủ/);
+  const ok = Q.evaluateGross({ mode: 'net', gross: '20tr', allowance: '', dependents: 0, region: '1' });
+  assert.equal(ok.result.target, 20000000);
+  assert.ok(ok.result.net >= 20000000);
+  assert.match(Q.netQuipFor(ok.result, 's'), /\d/);
+  assert.ok(!/[{}]/.test(Q.netQuipFor(ok.result, 's')));
+  assert.match(Q.evaluateGross({ mode: 'net', gross: '', dependents: 0 }).hint, /muốn cầm về/);
+});
+
+/* ---------- So sánh offer ---------- */
+test('so sánh 2 offer: theo lương thực nhận mỗi giờ', () => {
+  const out = Q.evaluateOffers({
+    a: { gross: '30tr', allowance: '', days: '22', hours: '8' },
+    b: { gross: '28tr', allowance: '1tr', days: '20', hours: '8' },
+    dependents: 0, region: '1'
+  });
+  const r = out.result;
+  assert.ok(r.a.hourly > 0 && r.b.hourly > 0);
+  assert.equal(r.win, r.a.hourly >= r.b.hourly ? 'a' : 'b');
+  assert.ok(r.diff >= 0);
+  assert.equal(r.b.monthHours, 160);
+  const q = Q.offerQuip(r.diff, 'B', 's');
+  assert.ok(!/[{}]/.test(q), q);
+  noBadNumbers(out);
+});
+
+test('so sánh offer: thiếu hoặc sai thì gợi ý', () => {
+  assert.match(Q.evaluateOffers({ a: { gross: '30tr', days: '22', hours: '8' }, b: { gross: '', days: '22', hours: '8' } }).hint, /cả hai offer/);
+  assert.match(Q.evaluateOffers({ a: { gross: 'abc', days: '22', hours: '8' }, b: { gross: '1tr', days: '22', hours: '8' } }).hint, /chưa ổn/);
+  assert.match(Q.evaluateOffers({ a: { gross: '1tr', days: '40', hours: '8' }, b: { gross: '1tr', days: '22', hours: '8' } }).hint, /chưa ổn/);
+  for (const [d, k] of [[0.01, 0], [0.08, 1], [0.4, 2]]) {
+    const q = Q.offerQuip(d, 'A', 'x');
+    assert.ok(Q.OFFER_QUIPS[k].lines.some((l) => q === l.replace('{win}', 'A').replace('{pct}', Q.formatNumber(d * 100, d < 0.1 ? 1 : 0) + '%')), q);
+  }
+});
+
+/* ---------- Để dành ---------- */
+test('để dành: số tháng = tổng / phần lương để dành', () => {
+  const out = evc([{ name: 'iPhone mới', price: '30tr' }], { payMode: 'save', savePct: 0.2 });
+  const sv = out.result.saving;
+  assert.equal(sv.perMonth, 3000000);
+  assert.equal(sv.months, 10);
+  assert.equal(sv.span.text, '10 tháng');
+  assert.equal(out.result.installment, null);
+  assert.match(out.result.sentence, /^Để dành 20% lương \(3\.000\.000đ\) mỗi tháng thì sau 10 tháng là mua được\.$/);
+  assert.ok(Q.SAVING_QUIPS[2].lines.map((l) => l.replace('{t}', '10 tháng')).includes(out.result.quip));
+  assert.equal(Q.formatMonths(0.2).text, '6 ngày');
+  assert.equal(Q.formatMonths(2.5).text, '2,5 tháng');
+  assert.equal(Q.formatMonths(30).text, '2,5 năm');
+  noBadNumbers(out);
+});
+
+/* ---------- Thói quen ---------- */
+const ctx = { hourlyRate: 15000000 / 176, hours: 8, days: 22 };
+test('thói quen: quy ra mỗi năm, sắp theo tốn nhất', () => {
+  const out = Q.evaluateHabits({ habits: [
+    { name: 'Cà phê', price: '35k', times: '5', per: 'week' },
+    { name: 'Trà sữa', price: '45k', times: '5', per: 'week' },
+    { name: 'Netflix', price: '260k', times: '1', per: 'month' }
+  ] }, ctx);
+  const r = out.result;
+  assert.equal(r.habits[0].name, 'Trà sữa');
+  assert.equal(r.habits[0].yearCost, 45000 * 5 * 52);
+  assert.equal(r.total, 45000 * 260 + 35000 * 260 + 260000 * 12);
+  assert.ok(Math.abs(r.top.workDays - 45000 * 260 / ctx.hourlyRate / 8) < 1e-9);
+  assert.match(r.quip, /^Trà sữa|trà sữa/);
+  assert.ok(!/[{}]/.test(r.quip), r.quip);
+  noBadNumbers(out);
+});
+
+test('thói quen: thiếu lương, chưa có giá, số lần sai', () => {
+  const h = [{ name: 'x', price: '45k', times: '5', per: 'day' }];
+  assert.match(Q.evaluateHabits({ habits: h }, null).hint, /lương về tay/);
+  assert.match(Q.evaluateHabits({ habits: [{ name: 'x', price: '', times: '5', per: 'day' }] }, ctx).hint, /Nhập giá/);
+  assert.match(Q.evaluateHabits({ habits: [{ name: 'x', price: '45k', times: '0', per: 'day' }] }, ctx).hint, /Số lần/);
+  assert.match(Q.evaluateHabits({ habits: [{ name: 'x', price: 'abc', times: '1', per: 'day' }] }, ctx).hint, /chưa đọc được/);
+  assert.equal(Q.evaluateHabits({ habits: [{ name: '', price: '10k', times: '1', per: 'day' }] }, ctx).result.top.name, 'Thói quen 1');
+});
+
+/* ---------- Đồng hồ kiếm tiền ---------- */
+test('đồng hồ: trước giờ, đang làm, sau giờ', () => {
+  const start = Q.parseClock('08:30'), end = Q.parseClock('17:30');
+  assert.equal(start, 510);
+  assert.equal(Q.parseClock('25:00'), null);
+  assert.equal(Q.parseClock('abc'), null);
+  const daily = 15000000 / 22;
+  assert.equal(Q.clockState(8 * 3600, start, end, daily).phase, 'before');
+  const mid = Q.clockState(13 * 3600, start, end, daily);
+  assert.equal(mid.phase, 'working');
+  assert.ok(Math.abs(mid.earned - daily * 0.5) < 1e-6);
+  assert.ok(Math.abs(mid.ratePerSec - daily / (9 * 3600)) < 1e-9);
+  const after = Q.clockState(18 * 3600, start, end, daily);
+  assert.equal(after.phase, 'after');
+  assert.equal(after.earned, daily);
+  // ca đêm 22:00 → 06:00
+  const night = Q.clockState(1 * 3600, Q.parseClock('22:00'), Q.parseClock('06:00'), 800000);
+  assert.equal(night.phase, 'working');
+  assert.ok(Math.abs(night.earned - 300000) < 1e-6);
+});
+
+test('đồng hồ: đủ mấy món, câu toilet', () => {
+  assert.match(Q.affordable(412350), /^đủ \d+ /);
+  assert.equal(Q.affordable(1000), '');
+  for (const [sec, k] of [[30, 0], [200, 1], [600, 2], [1500, 3]]) {
+    const q = Q.toiletQuip(sec, 23400, 'x');
+    assert.ok(!/[{}]/.test(q), q);
+    const lines = Q.TOILET_QUIPS[k].lines.map((l) => l.replace('{money}', '23.400đ').replace('{t}', Q.formatElapsed(sec)));
+    assert.ok(lines.includes(q), q);
+  }
+  assert.equal(Q.formatElapsed(125), '2 phút 5 giây');
+  assert.equal(Q.formatElapsed(42), '42 giây');
+});
+
+test('kho câu mới: không câu nào trùng, mỗi mức đủ 3 câu', () => {
+  const pools = [Q.TIME_QUIPS, Q.TAX_QUIPS, Q.INSTALLMENT_QUIPS, Q.OFFER_QUIPS, Q.SAVING_QUIPS, Q.HABIT_QUIPS, Q.TOILET_QUIPS];
+  const all = pools.flatMap((p) => p.flatMap((b) => b.lines)).concat(Q.NET_TO_GROSS_QUIPS);
+  assert.equal(new Set(all).size, all.length);
+  pools.forEach((p) => p.forEach((b) => assert.ok(b.lines.length >= 3)));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
