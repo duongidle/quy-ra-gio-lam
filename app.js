@@ -1163,7 +1163,8 @@
 
     var el = {
       tabs: $all('[role="tab"]'),
-      panels: { gross: $('panel-gross'), time: $('panel-time'), habit: $('panel-habit'), clock: $('panel-clock') },
+      panels: { gross: $('panel-gross'), time: $('panel-time'), habit: $('panel-habit'), clock: $('panel-clock'), data: $('panel-data') },
+      savedList: $('saved-list'),
       modes: $all('[data-mode]'),
       grossForm: $('gross-form'),
       offersForm: $('offers-form'),
@@ -1347,6 +1348,64 @@
         if (isDefault) s.removeItem(STORAGE_KEY);
         else s.setItem(STORAGE_KEY, JSON.stringify(data));
       } catch (e) { /* không lưu được thì thôi */ }
+      renderSaved();
+    }
+
+    /* --- Tab "Dữ liệu": đọc thẳng từ bộ nhớ, để thấy đúng những gì máy đang giữ --- */
+    function readSaved() {
+      try {
+        var s = storage();
+        return s ? JSON.parse(s.getItem(STORAGE_KEY) || 'null') : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function moneyText(raw) {
+      var v = core.parseMoney(raw);
+      return v ? core.formatVND(v) : '';
+    }
+
+    function renderSaved() {
+      var d = readSaved();
+      el.savedList.textContent = '';
+      var rows = [];
+      if (d && typeof d === 'object') {
+        var habitsCount = Array.isArray(d.habits) ? d.habits.length : 0;
+        rows = [
+          ['Lương về tay', moneyText(d.salary)],
+          [d.calcMode === 'net' ? 'Muốn cầm về' : 'Lương gross', moneyText(d.gross)],
+          ['Phụ cấp miễn thuế', moneyText(d.allowance)],
+          ['Lương đóng BH', moneyText(d.insuranceBase)],
+          ['Người phụ thuộc · vùng', (d.dependents || '0') + ' người · Vùng ' + ['I', 'II', 'III', 'IV'][(Number(d.region) || 1) - 1]],
+          ['Ngày · giờ làm', (d.days || core.DEFAULTS.days) + ' ngày × ' + (d.hours || core.DEFAULTS.hours) + ' giờ'],
+          ['Thói quen', habitsCount ? habitsCount + ' thói quen' : ''],
+          ['Giờ vào · giờ về', (d.clockStart || CLOCK_DEFAULT.start) + ' → ' + (d.clockEnd || CLOCK_DEFAULT.end)]
+        ];
+      }
+      if (!rows.length) {
+        var empty = document.createElement('div');
+        empty.className = 'row';
+        var dt = document.createElement('dt');
+        dt.textContent = 'Chưa lưu gì cả';
+        empty.appendChild(dt);
+        el.savedList.appendChild(empty);
+        el.clear.disabled = true;
+        return;
+      }
+      el.clear.disabled = false;
+      rows.forEach(function (r) {
+        var row = document.createElement('div');
+        row.className = 'row';
+        var dt = document.createElement('dt');
+        dt.textContent = r[0];
+        var dd = document.createElement('dd');
+        dd.textContent = r[1] || '—';
+        if (!r[1]) dd.className = 'none';
+        row.appendChild(dt);
+        row.appendChild(dd);
+        el.savedList.appendChild(row);
+      });
     }
 
     function clearSaved() {
@@ -1368,6 +1427,7 @@
       el.clockEnd.value = CLOCK_DEFAULT.end;
       renderHabits();
       updateAll(true);
+      renderSaved();
       toast('Đã xoá. Máy này không còn nhớ lương của cậu nữa.');
     }
 
@@ -1384,7 +1444,7 @@
       try { history.replaceState(null, '', '#' + HASHES[name]); } catch (e) { /* file:// */ }
       tick();
     }
-    var HASHES = { gross: 'net', time: 'time', habit: 'habit', clock: 'clock' };
+    var HASHES = { gross: 'net', time: 'time', habit: 'habit', clock: 'clock', data: 'data' };
 
     /* --- Hiển thị chung --- */
     function toast(text) {
@@ -1421,10 +1481,20 @@
         }
       }
       if (!(error && !showErrors && sub.classList.contains('warn'))) {
-        sub.textContent = text;
-        sub.className = 'row-sub' + (cls ? ' ' + cls : '');
+        holdHeight(sub, function () {
+          sub.textContent = text;
+          sub.className = 'row-sub' + (cls ? ' ' + cls : '');
+        });
       }
       input.setAttribute('aria-invalid', error && showErrors ? 'true' : 'false');
+    }
+
+    // Đổi chữ trong dòng phụ mà không làm nó co lại: nếu co, mọi thứ bên dưới bị kéo lên đúng lúc
+    // người dùng đang chạm, và cú chạm trượt sang chỗ khác (gặp ở màn 320px)
+    function holdHeight(node, change) {
+      var before = node.offsetHeight;
+      change();
+      if (node.offsetHeight < before) node.style.minHeight = before + 'px';
     }
 
     function keyOf(input) {
@@ -2694,5 +2764,6 @@
     showTab(hashTab || savedTab || (inputs.salary.value.trim() ? 'time' : 'gross'));
     updateAll(true);
     $all('.row-input.money input').forEach(fitMoneyInput);
+    renderSaved();
   }
 })();

@@ -93,8 +93,8 @@ h1 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 3px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
   padding: 4px;
   border-radius: 999px;
   background: var(--soft);
@@ -104,9 +104,9 @@ h1 {
   appearance: none;
   border: 0;
   background: transparent;
-  padding: 9px 2px;
+  padding: 9px 0;
   border-radius: 999px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 650;
   color: var(--muted);
   cursor: pointer;
@@ -509,14 +509,6 @@ dl.list dt small { display: block; font-size: 12.5px; }
   color: var(--muted);
 }
 
-.foot {
-  margin: 28px 4px 0;
-  text-align: center;
-  font-size: 12.5px;
-  color: var(--muted);
-}
-.foot p { margin: 0 0 2px; }
-
 .tabs [role="tab"]:focus-visible, .link-btn:focus-visible, .primary-btn:focus-visible,
 .share-btn:focus-visible, .stepper button:focus-visible, .seg button:focus-visible, .chip:focus-visible {
   outline: 2px solid var(--accent);
@@ -746,6 +738,26 @@ dl.list > .row.top dd { color: var(--accent); }
   font-variant-numeric: tabular-nums;
 }
 .salary-ctx { line-height: 1.5; }
+
+/* Tab Dữ liệu */
+.hero-value.hero-text { font-size: clamp(28px, 8vw, 36px); letter-spacing: -0.02em; }
+dl.list dd.none { color: var(--muted); font-weight: 500; }
+.danger-btn {
+  appearance: none;
+  margin-top: 16px;
+  padding: 10px 20px;
+  border: 1.5px solid var(--warn);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--warn);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.danger-btn:hover:not(:disabled) { background: var(--warn); color: var(--surface); }
+.danger-btn:disabled { opacity: 0.4; cursor: default; }
+.danger-btn:focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
 
 /* --- Bố cục: điện thoại một cột (kết quả lên đầu), màn rộng hai cột nhập | kết quả --- */
 .panel { display: flex; flex-direction: column; }

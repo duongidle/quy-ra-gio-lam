@@ -12,8 +12,8 @@
   <meta name="theme-color" content="#171310" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%23FDE6D8' stroke='%23D9531E' stroke-width='6'/%3E%3Cpath d='M32 18v14l10 6' fill='none' stroke='%23D9531E' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
   <!-- Đổi ?v= mỗi lần sửa CSS/JS để trình duyệt không dùng bản cũ trong cache -->
-  <link rel="stylesheet" href="style.css?v=17">
-  <script src="app.js?v=17" defer></script>
+  <link rel="stylesheet" href="style.css?v=19">
+  <script src="app.js?v=19" defer></script>
 </head>
 <body>
   <main class="wrap">
@@ -35,6 +35,7 @@
         <button type="button" role="tab" id="tab-time" data-tab="time" aria-controls="panel-time" aria-selected="false" tabindex="-1">Mua sắm</button>
         <button type="button" role="tab" id="tab-habit" data-tab="habit" aria-controls="panel-habit" aria-selected="false" tabindex="-1">Thói quen</button>
         <button type="button" role="tab" id="tab-clock" data-tab="clock" aria-controls="panel-clock" aria-selected="false" tabindex="-1">Đồng hồ</button>
+        <button type="button" role="tab" id="tab-data" data-tab="data" aria-controls="panel-data" aria-selected="false" tabindex="-1">Dữ liệu</button>
       </div>
     </header>
 
@@ -60,7 +61,7 @@
             <label class="row" for="allowance">
               <span class="row-main">
                 <span class="row-label">Phụ cấp miễn thuế</span>
-                <span class="row-sub" id="allowance-sub" data-default="Ăn trưa, xăng xe… ngoài gross"></span>
+                <span class="row-sub" id="allowance-sub" data-default="Ăn trưa, xăng xe…"></span>
               </span>
               <span class="row-input money"><input id="allowance" type="text" inputmode="text" placeholder="0"
                 spellcheck="false" autocapitalize="off" enterkeyhint="next" aria-describedby="allowance-sub"></span>
@@ -325,10 +326,27 @@
       </div>
     </section>
 
-    <footer class="foot">
-      <p id="storage-note">Không máy chủ, không theo dõi. Số liệu chỉ lưu trên máy này.</p>
-      <button type="button" id="clear" class="link-btn">Xoá dữ liệu đã lưu</button>
-    </footer>
+    <!-- ============ Dữ liệu ============ -->
+    <section id="panel-data" class="panel" role="tabpanel" aria-labelledby="tab-data" hidden>
+      <div class="side side-input">
+        <div class="group o-2">
+          <h2 class="group-title">Đang lưu trên máy này</h2>
+          <dl class="list" id="saved-list"></dl>
+          <p class="group-foot">Giỏ hàng và hai offer không được lưu, đóng trang là mất.</p>
+        </div>
+      </div>
+
+      <div class="side side-result">
+        <h2 class="group-title desk-only o-1">Quyền riêng tư</h2>
+        <div class="hero o-1">
+          <span class="sticker" aria-hidden="true">🔒</span>
+          <p class="hero-label">Dữ liệu của cậu</p>
+          <p class="hero-value hero-text">Chỉ nằm trên máy này</p>
+          <p class="hero-sub" id="storage-note">Không máy chủ, không theo dõi, không cookie. Trang không gửi gì ra ngoài, kể cả lương.</p>
+          <button type="button" id="clear" class="danger-btn">Xoá dữ liệu đã lưu</button>
+        </div>
+      </div>
+    </section>
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
