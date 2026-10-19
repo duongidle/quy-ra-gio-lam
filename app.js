@@ -221,79 +221,79 @@
    */
   var TIME_QUIPS = [
     { upTo: function (m) { return m < 1; }, lines: [
-      'Chưa kịp nhấp ngụm nước đã kiếm đủ.',
-      'Chớp mắt cái là đủ tiền. Mua đi, nghĩ chi cho mệt.',
-      'Nhanh hơn cả thời gian mở app giao đồ ăn.'
+      'Chớp mắt cái là đủ tiền. Quá dễ!',
+      'Vài giây đi làm là có. Ngon ơ!',
+      'Chưa tới một phút công. Mua luôn, khỏi nghĩ!'
     ] },
     { upTo: function (m) { return m < 5; }, lines: [
-      'Ít hơn thời gian lướt một clip TikTok. Duyệt!',
-      'Rẻ như cho. Ví còn chưa kịp kêu.',
-      'Vài phút gõ phím là xong. Ngon lành cành đào.'
+      'Chưa hết một clip TikTok. Duyệt!',
+      'Vài phút gõ phím là có. Ngon lành!',
+      'Ví còn chưa kịp đau. Mua!'
     ] },
     { upTo: function (m) { return m < 15; }, lines: [
-      'Nhẹ tênh, chớp mắt là xong.',
-      'Cỡ một lần đi pha cà phê ở công ty thôi.',
-      'Mười mấy phút ngồi máy. Không đáng để nghĩ nhiều đâu.'
+      'Pha ly cà phê ở công ty là đủ. Nhẹ tênh!',
+      'Mười mấy phút ngồi máy. Nghĩ chi cho mệt!',
+      'Đi vệ sinh lâu chút là kiếm đủ. Hehe.'
     ] },
     { upTo: function (m) { return m < 30; }, lines: [
-      'Bằng một cuộc họp lẽ ra chỉ cần gửi email.',
-      'Nửa tiếng đi làm đổi lấy món này. Cũng được đấy chứ.',
-      'Lướt mạng trong giờ làm cũng tốn chừng ấy rồi 👀'
+      'Bằng một cuộc họp lẽ ra chỉ cần gửi email. Được!',
+      'Nửa tiếng công. Mua được, đừng nghiện là được.',
+      'Lướt mạng trong giờ làm cũng tốn chừng đó. Huề!'
     ] },
     { upTo: function (m) { return m < 60; }, lines: [
-      'Chưa hết một cuộc họp.',
+      'Chưa hết một cuộc họp. Vẫn ổn!',
       'Gần một tiếng ngồi máy. Mua thì mua, đừng mua mỗi ngày nha.',
-      'Một tiếng chạy deadline đổi lấy cái này. Đáng không, tự hỏi lòng mình đi.'
+      'Một tiếng chạy deadline. Đáng không, tự hỏi lòng mình đi.'
     ] },
     { upTo: function (m, day) { return m < day / 2; }, lines: [
-      'Cỡ một buổi sáng cày cuốc rồi đấy.',
-      'Mấy tiếng bị sếp réo tên đổi lấy món này. Cân nhắc nha.',
-      'Bằng thời gian họp, uống cà phê, rồi lại họp.'
+      'Nguyên buổi sáng cày cuốc. Hơi xót rồi đó.',
+      'Mấy tiếng bị sếp réo tên. Cân nhắc nha.',
+      'Họp, cà phê, rồi lại họp. Xong một món.'
     ] },
     { upTo: function (m, day) { return m < day; }, lines: [
       'Hơn nửa ngày công. Mệt ẻ ra mới có đó.',
-      'Hơn nửa ngày ngồi máy đau lưng đổi lấy cái này.',
+      'Hơn nửa ngày ngồi máy đau lưng. Xứng không?',
       'Từ lúc chấm công tới quá giờ ăn trưa. Nghĩ kỹ chưa?'
     ] },
     { upTo: function (m, day) { return m < day * 2; }, lines: [
-      'Hơn một ngày công rồi. Ví bắt đầu run nhẹ.',
+      'Hơn một ngày công. Ví bắt đầu run.',
       'Hai ngày đi làm, hai lần kẹt xe. Đáng không?',
-      'Đủ để cậu than "mệt quá" ít nhất năm lần.'
+      'Đủ để than "mệt quá" năm lần. Chắc chưa?'
     ] },
     { upTo: function (m, day) { return m < day * 5; }, lines: [
-      'Vài ngày công. Cân nhắc chút nha.',
-      'Gần nguyên tuần làm việc, từ thứ Hai mệt mỏi tới thứ Sáu mong chờ.',
-      'Cả tuần đi làm đổi lấy một món. Ví khóc nhẹ 🥲'
+      'Vài ngày công. Đau ví nhẹ.',
+      'Nguyên tuần làm việc cho một món. Ví khóc 🥲',
+      'Từ thứ Hai mệt mỏi tới thứ Sáu mong chờ. Hết.'
     ] },
     { upTo: function (m, day, month) { return m < month; }, lines: [
-      'Mấy tuần công sức đó.',
-      'Ngần ấy ngày chịu đựng deadline. Mua xong nhớ xài cho xứng.',
-      'Mấy tuần đi làm mệt ẻ. Ngủ một đêm rồi hẵng quyết.'
+      'Mấy tuần công sức. Mua xong nhớ xài cho đáng.',
+      'Ngần ấy ngày chịu deadline. Ngủ một đêm rồi hẵng quyết.',
+      'Gần trọn tháng đi làm. Xót xa ghê.'
     ] },
     { upTo: function (m, day, month) { return m < month * 3; }, lines: [
       'Hít một hơi thật sâu trước khi bấm mua.',
-      'Cả tháng lương bay màu. Cậu chắc chưa?',
+      'Cả tháng lương bay màu. Chắc chưa?',
       'Ăn mì gói bao lâu mới bù lại đây 🍜'
     ] },
     { upTo: function (m, day, month) { return m < month * 12; }, lines: [
-      'Mấy tháng lương. Đừng bấm mua lúc nửa đêm nha.',
-      'Toang. Ví cậu vừa xỉu ngang 😵',
-      'Cái này phải lập kế hoạch tiết kiệm chứ không phải quẹt thẻ cho vui.'
+      'Mấy tháng lương. Toang.',
+      'Ví cậu vừa xỉu ngang 😵',
+      'Đừng bấm mua lúc nửa đêm nha. Xin đó.'
     ] },
     { upTo: function (m, day, month) { return m < month * 12 * 5; }, lines: [
-      'Món này cần một kế hoạch dài hơi, không phải một cú quẹt thẻ.',
-      'Vài năm đi làm không ăn không tiêu. Mơ thì cứ mơ 🌙',
-      'Cỡ này thì phải mở file Excel tiết kiệm ra rồi.'
+      'Vài năm không ăn không tiêu. Mơ thì cứ mơ 🌙',
+      'Cần kế hoạch dài hơi, không phải một cú quẹt thẻ.',
+      'Tới lúc mở file Excel tiết kiệm rồi. Căng.'
     ] },
     { upTo: function (m, day, month) { return m < month * 12 * 20; }, lines: [
       'Đi làm tới lúc tóc bạc. Bình tĩnh, uống miếng nước đã.',
-      'Chừng này năm thì sếp nghỉ hưu trước cậu luôn rồi.',
-      'Một phần ba cuộc đời đi làm. Hít thở sâu nào.'
+      'Sếp nghỉ hưu trước cậu luôn. Hết cứu.',
+      'Một phần ba cuộc đời đi làm. Thở đi.'
     ] },
     { upTo: function () { return true; }, lines: [
       'Làm tới kiếp sau may ra đủ 🫠',
-      'Thôi, mình ngắm thôi cũng được mà.',
-      'Con số này để ước thôi, đừng để tính.'
+      'Ngắm thôi cũng được mà. Ngắm free.',
+      'Con số này để ước, đừng để tính. Bye.'
     ] }
   ];
 
@@ -301,32 +301,32 @@
     { upTo: function (g) { return g.tax === 0 && g.net < 10000000; }, lines: [
       'Chưa phải đóng đồng thuế nào. Lương khiêm tốn thì thuế cũng tha 🥲',
       'Thuế: 0đ. Nhà nước còn thương, chưa thu đồng nào 😌',
-      'Không đóng thuế. Cuối tháng nhớ chừa tiền ăn sáng nha.'
+      'Không đóng thuế. Nhớ chừa tiền ăn sáng nha.'
     ] },
     { upTo: function (g) { return g.tax === 0; }, lines: [
       'Chưa phải đóng đồng thuế nào. Ngon! 😎',
-      'Thuế: 0đ. Nhà nước chưa để ý tới cậu đâu.',
-      'Lương sạch thuế. Tận hưởng đi trước khi được tăng lương 😌'
+      'Thuế: 0đ. Nhà nước chưa để ý tới cậu đâu. Ngon!',
+      'Sạch thuế. Tận hưởng đi trước khi được tăng lương 😌'
     ] },
     { upTo: function (g) { return g.tax < 1000000; }, lines: [
-      'Nhà nước giữ hộ {tax} tiền thuế, cỡ vài ly cà phê thôi ☕',
-      'Góp {tax} tiền thuế. Coi như mời nhà nước vài ly trà sữa 🧋',
-      'Thuế có {tax} thôi. Nhẹ như lông hồng.'
+      'Thuế {tax}, cỡ vài ly cà phê. Nhẹ!',
+      'Góp {tax} tiền thuế. Coi như mời nhà nước ly trà sữa 🧋',
+      'Thuế có {tax}. Muỗi!'
     ] },
     { upTo: function (g) { return g.tax < 5000000; }, lines: [
-      'Mỗi tháng cậu góp {tax} tiền thuế xây đường 🛣️',
-      '{tax} tiền thuế mỗi tháng. Con đường trước nhà có công của cậu đó.',
-      'Đóng {tax} thuế. Bắt đầu thấy xót rồi đúng không 🥲'
+      'Góp {tax} thuế xây đường. Con đường trước nhà có phần cậu đó 🛣️',
+      'Đóng {tax} thuế. Bắt đầu thấy xót rồi đúng không 🥲',
+      'Thuế {tax}. Hơi đau nha.'
     ] },
     { upTo: function (g) { return g.tax < 20000000; }, lines: [
       'Đóng {tax} thuế mỗi tháng. Công dân gương mẫu 🫡',
-      '{tax} tiền thuế. Nhận lương xong nhìn phiếu mà mệt ẻ.',
-      'Thuế {tax}/tháng. Cậu đang gánh một góc ngân sách đó nha.'
+      'Thuế {tax}. Nhìn phiếu lương mà mệt ẻ.',
+      'Gánh {tax} ngân sách mỗi tháng. Gồng ghê.'
     ] },
     { upTo: function () { return true; }, lines: [
       'Đóng {tax} thuế mỗi tháng. Ngân sách cảm ơn cậu 🙇',
-      'Thuế {tax}. Cậu xứng đáng được tặng bằng khen.',
-      'Riêng tiền thuế đã hơn lương nhiều người. Đại gia rồi 🫡'
+      'Thuế {tax}. Xứng đáng được tặng bằng khen.',
+      'Tiền thuế hơn lương nhiều người. Đại gia rồi 🫡'
     ] }
   ];
 
