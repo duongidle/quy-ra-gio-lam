@@ -385,11 +385,36 @@ test('sticker theo đơn vị thời gian', () => {
   assert.equal(Q.stickerFor('lạ'), '🛍️');
 });
 
-test('câu bình luận về thuế', () => {
-  assert.match(Q.netQuip(Q.grossToNet({ gross: 15000000 })), /Chưa phải đóng/);
-  assert.match(Q.netQuip(Q.grossToNet({ gross: 30000000 })), /635\.000đ/);
-  assert.match(Q.netQuip(Q.grossToNet({ gross: 60000000 })), /xây đường/);
-  assert.match(Q.netQuip(Q.grossToNet({ gross: 300000000 })), /Ngân sách/);
+test('câu bình luận về thuế: đúng mức, ổn định theo hạt giống, đã thay {tax}', () => {
+  const inPool = (text, k, tax) => Q.TAX_QUIPS[k].lines.map((l) => l.replace('{tax}', tax)).includes(text);
+  const cases = [[8000000, 0], [15000000, 1], [30000000, 2], [60000000, 3], [100000000, 4], [300000000, 5]];
+  for (const [gross, k] of cases) {
+    const g = Q.grossToNet({ gross });
+    for (const seed of ['a', 'b', 'c', 'xyz']) {
+      const text = Q.netQuip(g, seed);
+      assert.ok(inPool(text, k, Q.formatVND(g.tax)), gross + ': ' + text);
+      assert.ok(!text.includes('{tax}'), text);
+      assert.equal(text, Q.netQuip(g, seed));
+    }
+  }
+  assert.match(Q.netQuip(Q.grossToNet({ gross: 30000000 }), 'seed'), /635\.000đ/);
+});
+
+test('câu bình luận theo thời gian: đủ mọi mức, ổn định theo hạt giống', () => {
+  const day = 8 * 60;
+  const cases = [[0.5, 0], [3, 1], [10, 2], [20, 3], [45, 4], [180, 5], [400, 6], [day * 1.5, 7], [day * 3, 8],
+    [day * 10, 9], [day * 22 * 2, 10], [day * 22 * 6, 11], [day * 22 * 12 * 3, 12], [day * 22 * 12 * 10, 13], [day * 22 * 12 * 50, 14]];
+  for (const [minutes, k] of cases) {
+    for (const seed of ['Ly cà phê|45000', 'x', '']) {
+      const text = Q.quip(minutes, 8, 22, seed);
+      assert.ok(Q.TIME_QUIPS[k].lines.includes(text), minutes + ' phút -> ' + text);
+      assert.equal(text, Q.quip(minutes, 8, 22, seed));
+    }
+  }
+  // Mỗi mức đều có ít nhất 3 câu và không câu nào trùng
+  const all = Q.TIME_QUIPS.flatMap((b) => b.lines).concat(Q.TAX_QUIPS.flatMap((b) => b.lines));
+  assert.equal(new Set(all).size, all.length);
+  Q.TIME_QUIPS.concat(Q.TAX_QUIPS).forEach((b) => assert.ok(b.lines.length >= 3));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

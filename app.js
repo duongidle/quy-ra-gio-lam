@@ -215,16 +215,139 @@
     return subject + ' ' + formatVND(price) + ' này đáng ' + duration.phrase + ' của cậu.';
   }
 
-  function quip(minutes, hoursPerDay, daysPerMonth) {
-    var days = minutes / (hoursPerDay * 60);
-    if (minutes < 1) return 'Chưa kịp nhấp ngụm nước đã kiếm đủ.';
-    if (minutes < 15) return 'Nhẹ tênh, chớp mắt là xong.';
-    if (minutes < 60) return 'Chưa hết một cuộc họp.';
-    if (days < 1) return 'Cỡ một buổi ngồi máy đấy.';
-    if (days < 5) return 'Vài ngày công. Cân nhắc chút nha.';
-    if (days < daysPerMonth) return 'Mấy tuần công sức đó.';
-    if (days < daysPerMonth * 12) return 'Hít một hơi thật sâu trước khi bấm mua.';
-    return 'Món này cần một kế hoạch dài hơi, không phải một cú quẹt thẻ.';
+  /*
+   * Câu bình luận: mỗi mức có vài câu, chọn theo "hạt giống" (món + giá) để cùng một
+   * kết quả luôn ra cùng một câu, không nhảy loạn mỗi lần gõ phím.
+   */
+  var TIME_QUIPS = [
+    { upTo: function (m) { return m < 1; }, lines: [
+      'Chưa kịp nhấp ngụm nước đã kiếm đủ.',
+      'Chớp mắt cái là đủ tiền. Mua đi, nghĩ chi cho mệt.',
+      'Nhanh hơn cả thời gian mở app giao đồ ăn.'
+    ] },
+    { upTo: function (m) { return m < 5; }, lines: [
+      'Ít hơn thời gian lướt một clip TikTok. Duyệt!',
+      'Rẻ như cho. Ví còn chưa kịp kêu.',
+      'Vài phút gõ phím là xong. Ngon lành cành đào.'
+    ] },
+    { upTo: function (m) { return m < 15; }, lines: [
+      'Nhẹ tênh, chớp mắt là xong.',
+      'Cỡ một lần đi pha cà phê ở công ty thôi.',
+      'Mười mấy phút ngồi máy. Không đáng để nghĩ nhiều đâu.'
+    ] },
+    { upTo: function (m) { return m < 30; }, lines: [
+      'Bằng một cuộc họp lẽ ra chỉ cần gửi email.',
+      'Nửa tiếng đi làm đổi lấy món này. Cũng được đấy chứ.',
+      'Lướt mạng trong giờ làm cũng tốn chừng ấy rồi 👀'
+    ] },
+    { upTo: function (m) { return m < 60; }, lines: [
+      'Chưa hết một cuộc họp.',
+      'Gần một tiếng ngồi máy. Mua thì mua, đừng mua mỗi ngày nha.',
+      'Một tiếng chạy deadline đổi lấy cái này. Đáng không, tự hỏi lòng mình đi.'
+    ] },
+    { upTo: function (m, day) { return m < day / 2; }, lines: [
+      'Cỡ một buổi sáng cày cuốc rồi đấy.',
+      'Mấy tiếng bị sếp réo tên đổi lấy món này. Cân nhắc nha.',
+      'Bằng thời gian họp, uống cà phê, rồi lại họp.'
+    ] },
+    { upTo: function (m, day) { return m < day; }, lines: [
+      'Hơn nửa ngày công. Mệt ẻ ra mới có đó.',
+      'Hơn nửa ngày ngồi máy đau lưng đổi lấy cái này.',
+      'Từ lúc chấm công tới quá giờ ăn trưa. Nghĩ kỹ chưa?'
+    ] },
+    { upTo: function (m, day) { return m < day * 2; }, lines: [
+      'Hơn một ngày công rồi. Ví bắt đầu run nhẹ.',
+      'Hai ngày đi làm, hai lần kẹt xe. Đáng không?',
+      'Đủ để cậu than "mệt quá" ít nhất năm lần.'
+    ] },
+    { upTo: function (m, day) { return m < day * 5; }, lines: [
+      'Vài ngày công. Cân nhắc chút nha.',
+      'Gần nguyên tuần làm việc, từ thứ Hai mệt mỏi tới thứ Sáu mong chờ.',
+      'Cả tuần đi làm đổi lấy một món. Ví khóc nhẹ 🥲'
+    ] },
+    { upTo: function (m, day, month) { return m < month; }, lines: [
+      'Mấy tuần công sức đó.',
+      'Ngần ấy ngày chịu đựng deadline. Mua xong nhớ xài cho xứng.',
+      'Mấy tuần đi làm mệt ẻ. Ngủ một đêm rồi hẵng quyết.'
+    ] },
+    { upTo: function (m, day, month) { return m < month * 3; }, lines: [
+      'Hít một hơi thật sâu trước khi bấm mua.',
+      'Cả tháng lương bay màu. Cậu chắc chưa?',
+      'Ăn mì gói bao lâu mới bù lại đây 🍜'
+    ] },
+    { upTo: function (m, day, month) { return m < month * 12; }, lines: [
+      'Mấy tháng lương. Đừng bấm mua lúc nửa đêm nha.',
+      'Toang. Ví cậu vừa xỉu ngang 😵',
+      'Cái này phải lập kế hoạch tiết kiệm chứ không phải quẹt thẻ cho vui.'
+    ] },
+    { upTo: function (m, day, month) { return m < month * 12 * 5; }, lines: [
+      'Món này cần một kế hoạch dài hơi, không phải một cú quẹt thẻ.',
+      'Vài năm đi làm không ăn không tiêu. Mơ thì cứ mơ 🌙',
+      'Cỡ này thì phải mở file Excel tiết kiệm ra rồi.'
+    ] },
+    { upTo: function (m, day, month) { return m < month * 12 * 20; }, lines: [
+      'Đi làm tới lúc tóc bạc. Bình tĩnh, uống miếng nước đã.',
+      'Chừng này năm thì sếp nghỉ hưu trước cậu luôn rồi.',
+      'Một phần ba cuộc đời đi làm. Hít thở sâu nào.'
+    ] },
+    { upTo: function () { return true; }, lines: [
+      'Làm tới kiếp sau may ra đủ 🫠',
+      'Thôi, mình ngắm thôi cũng được mà.',
+      'Con số này để ước thôi, đừng để tính.'
+    ] }
+  ];
+
+  var TAX_QUIPS = [
+    { upTo: function (g) { return g.tax === 0 && g.net < 10000000; }, lines: [
+      'Chưa phải đóng đồng thuế nào. Lương khiêm tốn thì thuế cũng tha 🥲',
+      'Thuế: 0đ. Nhà nước còn thương, chưa thu đồng nào 😌',
+      'Không đóng thuế. Cuối tháng nhớ chừa tiền ăn sáng nha.'
+    ] },
+    { upTo: function (g) { return g.tax === 0; }, lines: [
+      'Chưa phải đóng đồng thuế nào. Ngon! 😎',
+      'Thuế: 0đ. Nhà nước chưa để ý tới cậu đâu.',
+      'Lương sạch thuế. Tận hưởng đi trước khi được tăng lương 😌'
+    ] },
+    { upTo: function (g) { return g.tax < 1000000; }, lines: [
+      'Nhà nước giữ hộ {tax} tiền thuế, cỡ vài ly cà phê thôi ☕',
+      'Góp {tax} tiền thuế. Coi như mời nhà nước vài ly trà sữa 🧋',
+      'Thuế có {tax} thôi. Nhẹ như lông hồng.'
+    ] },
+    { upTo: function (g) { return g.tax < 5000000; }, lines: [
+      'Mỗi tháng cậu góp {tax} tiền thuế xây đường 🛣️',
+      '{tax} tiền thuế mỗi tháng. Con đường trước nhà có công của cậu đó.',
+      'Đóng {tax} thuế. Bắt đầu thấy xót rồi đúng không 🥲'
+    ] },
+    { upTo: function (g) { return g.tax < 20000000; }, lines: [
+      'Đóng {tax} thuế mỗi tháng. Công dân gương mẫu 🫡',
+      '{tax} tiền thuế. Nhận lương xong nhìn phiếu mà mệt ẻ.',
+      'Thuế {tax}/tháng. Cậu đang gánh một góc ngân sách đó nha.'
+    ] },
+    { upTo: function () { return true; }, lines: [
+      'Đóng {tax} thuế mỗi tháng. Ngân sách cảm ơn cậu 🙇',
+      'Thuế {tax}. Cậu xứng đáng được tặng bằng khen.',
+      'Riêng tiền thuế đã hơn lương nhiều người. Đại gia rồi 🫡'
+    ] }
+  ];
+
+  function hashSeed(seed) {
+    var str = String(seed === undefined || seed === null ? '' : seed);
+    var h = 0;
+    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    return h;
+  }
+
+  function pickLine(lines, seed) {
+    return lines[hashSeed(seed) % lines.length];
+  }
+
+  function quip(minutes, hoursPerDay, daysPerMonth, seed) {
+    var day = hoursPerDay * 60;
+    var month = day * daysPerMonth;
+    for (var i = 0; i < TIME_QUIPS.length; i++) {
+      if (TIME_QUIPS[i].upTo(minutes, day, month)) return pickLine(TIME_QUIPS[i].lines, seed);
+    }
+    return '';
   }
 
   var STICKERS = { seconds: '⚡', minutes: '☕', hours: '🕐', days: '📅', months: '🗓️', years: '🏔️' };
@@ -234,13 +357,11 @@
   }
 
   // Một câu bình luận vui về tiền thuế, dựa trên kết quả của grossToNet.
-  function netQuip(g) {
-    var tax = formatVND(g.tax);
-    if (g.tax === 0) return 'Chưa phải đóng đồng thuế nào. Ngon! 😎';
-    if (g.tax < 1000000) return 'Nhà nước giữ hộ ' + tax + ' tiền thuế, cỡ vài ly cà phê thôi ☕';
-    if (g.tax < 5000000) return 'Mỗi tháng cậu góp ' + tax + ' tiền thuế xây đường 🛣️';
-    if (g.tax < 20000000) return 'Đóng ' + tax + ' thuế mỗi tháng. Công dân gương mẫu 🫡';
-    return 'Đóng ' + tax + ' thuế mỗi tháng. Ngân sách cảm ơn cậu 🙇';
+  function netQuip(g, seed) {
+    for (var i = 0; i < TAX_QUIPS.length; i++) {
+      if (TAX_QUIPS[i].upTo(g)) return pickLine(TAX_QUIPS[i].lines, seed).replace('{tax}', formatVND(g.tax));
+    }
+    return '';
   }
 
   var MSG = {
@@ -424,7 +545,7 @@
         minutes: minutes,
         duration: duration,
         sentence: buildSentence(raw.name, f.price.value, duration),
-        quip: quip(minutes, f.hours.value, f.days.value)
+        quip: quip(minutes, f.hours.value, f.days.value, cleanName(raw.name) + '|' + f.price.value)
       };
     }
     return out;
@@ -468,6 +589,8 @@
     buildSentence: buildSentence,
     capitalizeFirst: capitalizeFirst,
     quip: quip,
+    TIME_QUIPS: TIME_QUIPS,
+    TAX_QUIPS: TAX_QUIPS,
     stickerFor: stickerFor,
     netQuip: netQuip,
     GROSS_RULES: GROSS_RULES,
@@ -797,7 +920,7 @@
       el.gNet.textContent = '';
       setBig(el.gNet, [[netText, 'đ']]);
       if (netText !== lastNet) { pop(el.gNet); pop(el.gSticker); lastNet = netText; }
-      el.gQuip.textContent = core.netQuip(g);
+      el.gQuip.textContent = core.netQuip(g, g.gross + '|' + g.allowance + '|' + gross.dependents);
       el.gQuip.hidden = false;
 
       var total = g.gross + g.allowance;

@@ -29,6 +29,7 @@ Mở thẳng `index.html` bằng `file://` cũng chạy được.
 ## Deploy
 
 - **GitHub Pages**: Settings → Pages → Source: *Deploy from a branch* → chọn branch và thư mục `/ (root)`.
-- **Cloudflare Pages**: Create project → kết nối repo → Framework preset: *None*, Build command để trống, Build output directory: `/`.
+- **Cloudflare Pages**: Workers & Pages → Create → Pages → Connect to Git → chọn repo → Framework preset: *None*,
+  Build command để trống, Build output directory: `/`. File `_headers` gắn CSP và vài header bảo mật khi chạy trên Cloudflare.
 
 Khi sửa `style.css` hoặc `app.js`, tăng số `?v=` trong `index.html` để trình duyệt không dùng bản cũ trong cache.
