@@ -12,32 +12,45 @@
   <meta name="theme-color" content="#171310" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%23FDE6D8' stroke='%23D9531E' stroke-width='6'/%3E%3Cpath d='M32 18v14l10 6' fill='none' stroke='%23D9531E' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
   <!-- Đổi ?v= mỗi lần sửa CSS/JS để trình duyệt không dùng bản cũ trong cache -->
-  <link rel="stylesheet" href="style.css?v=5">
-  <script src="app.js?v=6" defer></script>
+  <link rel="stylesheet" href="style.css?v=7">
+  <script src="app.js?v=7" defer></script>
 </head>
 <body>
   <main class="wrap">
     <header class="top">
-      <h1>Quy ra giờ làm</h1>
+      <div class="brand">
+        <svg class="clock" viewBox="0 0 48 48" aria-hidden="true">
+          <circle class="face" cx="24" cy="24" r="19" stroke-width="4"/>
+          <line class="hand-long" x1="24" y1="24" x2="24" y2="11" stroke-width="4" stroke-linecap="round"/>
+          <line class="hand-short" x1="24" y1="24" x2="31" y2="28" stroke-width="4" stroke-linecap="round"/>
+          <circle class="pin" cx="24" cy="24" r="2.5"/>
+        </svg>
+        <div>
+          <h1>Quy ra giờ làm</h1>
+          <p class="tagline">Lương về tay bao nhiêu, món này tốn mấy giờ làm?</p>
+        </div>
+      </div>
       <div class="tabs" role="tablist" aria-label="Công cụ">
-        <button type="button" role="tab" id="tab-gross" data-tab="gross" aria-controls="panel-gross" aria-selected="true">Lương thực nhận</button>
-        <button type="button" role="tab" id="tab-time" data-tab="time" aria-controls="panel-time" aria-selected="false" tabindex="-1">Quy ra giờ làm</button>
+        <button type="button" role="tab" id="tab-gross" data-tab="gross" aria-controls="panel-gross" aria-selected="true">💸 Lương thực nhận</button>
+        <button type="button" role="tab" id="tab-time" data-tab="time" aria-controls="panel-time" aria-selected="false" tabindex="-1">⏰ Quy ra giờ làm</button>
       </div>
     </header>
 
     <!-- ============ Lương thực nhận (gross → net) ============ -->
     <section id="panel-gross" role="tabpanel" aria-labelledby="tab-gross">
       <div class="hero" aria-live="polite">
-        <p class="hero-label">Thực nhận mỗi tháng</p>
+        <span class="sticker" id="g-sticker" aria-hidden="true">💸</span>
+        <p class="hero-label">Mỗi tháng cầm về</p>
         <p class="hero-value"><span id="g-net">—</span></p>
         <div class="bar" id="g-bar" aria-hidden="true" hidden>
           <span class="b-net" id="bar-net"></span><span class="b-ins" id="bar-ins"></span><span class="b-tax" id="bar-tax"></span>
         </div>
         <p class="hero-sub" id="g-sub">Nhập lương gross bên dưới để xem.</p>
+        <p class="hero-quip" id="g-quip" hidden></p>
       </div>
 
       <form class="group" novalidate autocomplete="off">
-        <h2 class="group-title">Thu nhập</h2>
+        <h2 class="group-title">📄 Trên hợp đồng ghi</h2>
         <div class="list">
           <label class="row" for="gross">
             <span class="row-main">
@@ -56,7 +69,7 @@
               spellcheck="false" autocapitalize="off" enterkeyhint="next" aria-describedby="allowance-sub"></span>
           </label>
           <div class="row">
-            <span class="row-main"><span class="row-label" id="dep-label">Người phụ thuộc</span></span>
+            <span class="row-main"><span class="row-label" id="dep-label">Người phụ thuộc</span><span class="row-sub">Mỗi người bớt 6,2tr khi tính thuế</span></span>
             <span class="stepper" role="group" aria-labelledby="dep-label">
               <button type="button" id="dep-minus" aria-label="Bớt một người">−</button>
               <output id="dep-value" aria-live="polite">0</output>
@@ -64,7 +77,7 @@
             </span>
           </div>
           <div class="row">
-            <span class="row-main"><span class="row-label" id="region-label">Vùng lương</span></span>
+            <span class="row-main"><span class="row-label" id="region-label">Vùng lương</span><span class="row-sub">Nơi cậu làm việc</span></span>
             <span class="seg" role="radiogroup" aria-labelledby="region-label">
               <button type="button" role="radio" data-region="1" aria-checked="true" aria-label="Vùng I">I</button>
               <button type="button" role="radio" data-region="2" aria-checked="false" aria-label="Vùng II" tabindex="-1">II</button>
@@ -84,7 +97,7 @@
       </form>
 
       <section class="group" id="g-detail" hidden>
-        <h2 class="group-title">Chi tiết</h2>
+        <h2 class="group-title">🧾 Bị trừ những gì</h2>
         <dl class="list" id="g-lines"></dl>
       </section>
 
@@ -97,6 +110,7 @@
     <!-- ============ Quy ra giờ làm ============ -->
     <section id="panel-time" role="tabpanel" aria-labelledby="tab-time" hidden>
       <div class="hero" aria-live="polite">
+        <span class="sticker" id="t-sticker" aria-hidden="true">🛍️</span>
         <p class="hero-label">Món này tốn của cậu</p>
         <p class="hero-value" id="big">—</p>
         <p class="hero-detail" id="detail" hidden></p>
@@ -108,7 +122,18 @@
       </div>
 
       <form class="group" novalidate autocomplete="off">
-        <h2 class="group-title">Món đồ</h2>
+        <h2 class="group-title">🛍️ Đang nhắm món gì?</h2>
+        <div class="chips" id="chips" role="group" aria-label="Gợi ý nhanh tên món">
+          <button type="button" class="chip" data-name="Ly cà phê">☕ Cà phê</button>
+          <button type="button" class="chip" data-name="Ly trà sữa">🧋 Trà sữa</button>
+          <button type="button" class="chip" data-name="Tô phở">🍜 Phở</button>
+          <button type="button" class="chip" data-name="Lần đổ xăng">⛽ Đổ xăng</button>
+          <button type="button" class="chip" data-name="Vé xem phim">🎬 Xem phim</button>
+          <button type="button" class="chip" data-name="Đôi giày mới">👟 Giày</button>
+          <button type="button" class="chip" data-name="iPhone mới">📱 iPhone</button>
+          <button type="button" class="chip" data-name="Chuyến du lịch">✈️ Du lịch</button>
+          <button type="button" class="chip" data-name="Căn nhà">🏠 Nhà</button>
+        </div>
         <div class="list">
           <label class="row" for="name">
             <span class="row-main"><span class="row-label">Tên món</span>
@@ -128,10 +153,10 @@
           <option value="Chuyến du lịch"><option value="Căn nhà">
         </datalist>
 
-        <h2 class="group-title">Lương của cậu</h2>
+        <h2 class="group-title">💼 Còn cậu thì</h2>
         <div class="list">
           <label class="row" for="salary">
-            <span class="row-main"><span class="row-label">Thực nhận / tháng</span>
+            <span class="row-main"><span class="row-label">Lương về tay / tháng</span>
               <span class="row-sub" id="salary-sub" data-default="Sau thuế và bảo hiểm"></span></span>
             <span class="row-input money"><input id="salary" type="text" inputmode="text" placeholder="15tr"
               spellcheck="false" autocapitalize="off" enterkeyhint="next" aria-describedby="salary-sub"></span>
@@ -147,7 +172,7 @@
             <span class="row-input short"><input id="hours" type="text" inputmode="decimal" value="8" enterkeyhint="done" aria-describedby="hours-sub"></span>
           </label>
           <div class="row readonly">
-            <span class="row-main"><span class="row-label">Lương mỗi giờ</span></span>
+            <span class="row-main"><span class="row-label">1 giờ của cậu đáng</span></span>
             <span class="row-value" id="rate">—</span>
           </div>
         </div>

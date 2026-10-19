@@ -379,5 +379,18 @@ test('phụ cấp trống = 0, gõ sai -> báo, không kết quả', () => {
   noBadNumbers(bad);
 });
 
+test('sticker theo đơn vị thời gian', () => {
+  assert.equal(Q.stickerFor('minutes'), '☕');
+  assert.equal(Q.stickerFor('years'), '🏔️');
+  assert.equal(Q.stickerFor('lạ'), '🛍️');
+});
+
+test('câu bình luận về thuế', () => {
+  assert.match(Q.netQuip(Q.grossToNet({ gross: 15000000 })), /Chưa phải đóng/);
+  assert.match(Q.netQuip(Q.grossToNet({ gross: 30000000 })), /635\.000đ/);
+  assert.match(Q.netQuip(Q.grossToNet({ gross: 60000000 })), /xây đường/);
+  assert.match(Q.netQuip(Q.grossToNet({ gross: 300000000 })), /Ngân sách/);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

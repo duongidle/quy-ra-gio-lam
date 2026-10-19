@@ -227,6 +227,22 @@
     return 'Món này cần một kế hoạch dài hơi, không phải một cú quẹt thẻ.';
   }
 
+  var STICKERS = { seconds: '⚡', minutes: '☕', hours: '🕐', days: '📅', months: '🗓️', years: '🏔️' };
+
+  function stickerFor(kind) {
+    return STICKERS[kind] || '🛍️';
+  }
+
+  // Một câu bình luận vui về tiền thuế, dựa trên kết quả của grossToNet.
+  function netQuip(g) {
+    var tax = formatVND(g.tax);
+    if (g.tax === 0) return 'Chưa phải đóng đồng thuế nào. Ngon! 😎';
+    if (g.tax < 1000000) return 'Nhà nước giữ hộ ' + tax + ' tiền thuế, cỡ vài ly cà phê thôi ☕';
+    if (g.tax < 5000000) return 'Mỗi tháng cậu góp ' + tax + ' tiền thuế xây đường 🛣️';
+    if (g.tax < 20000000) return 'Đóng ' + tax + ' thuế mỗi tháng. Công dân gương mẫu 🫡';
+    return 'Đóng ' + tax + ' thuế mỗi tháng. Ngân sách cảm ơn cậu 🙇';
+  }
+
   var MSG = {
     salaryInvalid: 'Tớ chưa đọc được số này. Thử kiểu 15000000, 15tr hoặc 15 triệu nhé.',
     salaryZero: 'Lương 0 đồng thì món gì cũng tốn vô hạn giờ làm 😅 Nhập lương thật nhé.',
@@ -452,6 +468,8 @@
     buildSentence: buildSentence,
     capitalizeFirst: capitalizeFirst,
     quip: quip,
+    stickerFor: stickerFor,
+    netQuip: netQuip,
     GROSS_RULES: GROSS_RULES,
     progressiveTax: progressiveTax,
     grossToNet: grossToNet,
@@ -493,6 +511,10 @@
       rate: $('rate'),
       share: $('share'),
       gNet: $('g-net'),
+      gQuip: $('g-quip'),
+      gSticker: $('g-sticker'),
+      tSticker: $('t-sticker'),
+      chips: $('chips'),
       gSub: $('g-sub'),
       gBar: $('g-bar'),
       bar: { net: $('bar-net'), ins: $('bar-ins'), tax: $('bar-tax') },
@@ -696,13 +718,15 @@
         el.detail.hidden = true;
         el.sentence.textContent = state.hint;
         el.sentence.classList.remove('result-text');
+        el.tSticker.textContent = '🛍️';
         lastBig = '';
         return;
       }
       var d = r.duration;
       el.big.classList.remove('empty');
       setBig(el.big, d.parts);
-      if (d.text !== lastBig) { pop(el.big); lastBig = d.text; }
+      el.tSticker.textContent = core.stickerFor(d.kind);
+      if (d.text !== lastBig) { pop(el.big); pop(el.tSticker); lastBig = d.text; }
       var extra = [d.detail, d.monthsLine].filter(Boolean).join(' · ');
       el.detail.textContent = extra;
       el.detail.hidden = !extra;
@@ -753,6 +777,7 @@
         el.gNet.textContent = '—';
         el.gNet.parentNode.classList.add('empty');
         el.gSub.textContent = gState.hint;
+        el.gQuip.hidden = true;
         lastNet = '';
         return;
       }
@@ -761,7 +786,9 @@
       var netText = core.formatNumber(g.net);
       el.gNet.textContent = '';
       setBig(el.gNet, [[netText, 'đ']]);
-      if (netText !== lastNet) { pop(el.gNet); lastNet = netText; }
+      if (netText !== lastNet) { pop(el.gNet); pop(el.gSticker); lastNet = netText; }
+      el.gQuip.textContent = core.netQuip(g);
+      el.gQuip.hidden = false;
 
       var total = g.gross + g.allowance;
       el.bar.net.style.width = (g.net / total * 100) + '%';
@@ -984,6 +1011,15 @@
     }
     bind(inputs);
     bind(gInputs);
+
+    el.chips.addEventListener('click', function (e) {
+      var chip = e.target.closest('[data-name]');
+      if (!chip) return;
+      inputs.name.value = chip.getAttribute('data-name');
+      inputs.price.value = ''; // không tự điền giá: giá thật tuỳ nơi, tuỳ lúc
+      updateAll(true);
+      inputs.price.focus();
+    });
 
     el.tabs.forEach(function (tab, i) {
       tab.addEventListener('click', function () { showTab(tab.getAttribute('data-tab')); save(); });
