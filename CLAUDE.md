@@ -12,13 +12,14 @@ Năm tab:
 
 | Tab (nhãn)  | `data-tab` | Hash     | Làm gì |
 |-------------|-----------|----------|--------|
-| Cầm về      | `gross`   | `#net`   | 3 chế độ: Gross → Net, Net → Gross (dò ngược để deal lương), So 2 offer (lương thực nhận mỗi giờ) |
-| Quy ra giờ  | `time`    | `#time`  | Giỏ một hoặc nhiều món → thời gian làm việc; cách mua: trả thẳng / trả góp 0% / để dành % lương; quy ra đồ đời thường; chia sẻ ảnh 3 mẫu |
-| Thói quen   | `habit`   | `#habit` | Món nhỏ lặp lại (x lần / ngày·tuần·tháng) → mỗi năm tốn bao nhiêu ngày công |
-| Đồng hồ     | `clock`   | `#clock` | Tiền kiếm được hôm nay nhảy theo giây giữa giờ vào và giờ về; nút "Đang đi vệ sinh 🚽" |
-| Dữ liệu     | `data`    | `#data`  | Liệt kê đúng những gì đang lưu trong localStorage, giải thích quyền riêng tư, nút xoá |
+| Cầm về      | `gross`   | (không)  | 3 chế độ: Gross → Net, Net → Gross (dò ngược để deal lương), So 2 offer (lương thực nhận mỗi giờ) |
+| Quy ra giờ  | `time`    | `#quy-ra-gio` | Giỏ một hoặc nhiều món → thời gian làm việc; cách mua: trả thẳng / trả góp 0% / để dành % lương; quy ra đồ đời thường; chia sẻ ảnh 3 mẫu |
+| Thói quen   | `habit`   | `#thoi-quen` | Món nhỏ lặp lại (x lần / ngày·tuần·tháng) → mỗi năm tốn bao nhiêu ngày công |
+| Đồng hồ     | `clock`   | `#dong-ho` | Tiền kiếm được hôm nay nhảy theo giây giữa giờ vào và giờ về; nút "Đang đi vệ sinh 🚽" |
+| Dữ liệu     | `data`    | `#du-lieu` | Liệt kê đúng những gì đang lưu trong localStorage, giải thích quyền riêng tư, nút xoá |
 
-Hash tab **không được trùng `id` của ô nhập nào** (xem "Bẫy đã gặp"). `#gross` cũ vẫn được chấp nhận và mở tab Cầm về.
+Tab đầu để URL sạch (không `#`). Hash tab **không được trùng `id` của ô nhập nào** (xem "Bẫy đã gặp").
+Link cũ (`#net`, `#gross`, `#time`, `#habit`, `#clock`, `#data`) vẫn mở đúng tab qua `OLD_HASHES`.
 
 ## Ràng buộc cứng (không phá)
 

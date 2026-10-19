@@ -1441,10 +1441,15 @@
       });
       Object.keys(el.panels).forEach(function (key) { el.panels[key].hidden = key !== name; });
       // Hash khác id của mọi ô nhập, kẻo trình duyệt tự nhảy tới và focus vào ô đó
-      try { history.replaceState(null, '', '#' + HASHES[name]); } catch (e) { /* file:// */ }
+      // Tab đầu không cần đuôi: URL sạch. Tab khác dùng đuôi đọc được, để tải lại hay gửi link vẫn đúng tab.
+      var url = HASHES[name] ? '#' + HASHES[name] : location.pathname + location.search;
+      try { history.replaceState(null, '', url); } catch (e) { /* file:// */ }
       tick();
     }
-    var HASHES = { gross: 'net', time: 'time', habit: 'habit', clock: 'clock', data: 'data' };
+    // Hash không được trùng id của ô nhập nào, kẻo trình duyệt tự nhảy tới và focus vào ô đó
+    var HASHES = { gross: '', time: 'quy-ra-gio', habit: 'thoi-quen', clock: 'dong-ho', data: 'du-lieu' };
+    // Link cũ vẫn mở đúng tab
+    var OLD_HASHES = { net: 'gross', gross: 'gross', time: 'time', habit: 'habit', clock: 'clock', data: 'data' };
 
     /* --- Hiển thị chung --- */
     function toast(text) {
@@ -2748,9 +2753,9 @@
 
     function tabFromHash() {
       var h = location.hash.slice(1);
-      if (h === 'gross') return 'gross';
+      if (!h) return null;
       for (var key in HASHES) if (HASHES[key] === h) return key;
-      return null;
+      return OLD_HASHES[h] || null;
     }
     window.addEventListener('hashchange', function () {
       var tab = tabFromHash();
