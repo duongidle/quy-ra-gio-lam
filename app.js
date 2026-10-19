@@ -501,6 +501,9 @@
     var gInputs = { gross: $('gross'), allowance: $('allowance'), insuranceBase: $('insurance-base') };
     var MONEY_KEYS = ['salary', 'price', 'gross', 'allowance', 'insuranceBase'];
     var gross = { dependents: 0, region: '1' };
+    // Lương về tay ở tab giờ làm tự đi theo kết quả tab lương, cho tới khi người dùng tự gõ số khác.
+    // Ai sửa sau cùng thì thắng: chỉnh lại bên tab lương thì nó lại đồng bộ.
+    var salaryLinked = true;
 
     var el = {
       tabs: $all('[role="tab"]'),
@@ -521,6 +524,9 @@
       gDetail: $('g-detail'),
       gLines: $('g-lines'),
       useNet: $('use-net'),
+      footGo: $('foot-go'),
+      footRelink: $('foot-relink'),
+      relink: $('relink'),
       depValue: $('dep-value'),
       depMinus: $('dep-minus'),
       depPlus: $('dep-plus'),
@@ -580,6 +586,8 @@
         var dep = core.parseCount(saved.dependents);
         if (dep !== null && dep >= 0 && dep <= 20 && Math.floor(dep) === dep) gross.dependents = dep;
         if (/^[1-4]$/.test(saved.region)) gross.region = saved.region;
+        // Bản lưu cũ không có cờ này: đã có lương tự gõ thì giữ nguyên, đừng ghi đè
+        salaryLinked = typeof saved.linked === 'boolean' ? saved.linked : !(saved.salary && saved.salary.trim());
         return saved.tab === 'time' || saved.tab === 'gross' ? saved.tab : null;
       } catch (e) {
         return null; // dữ liệu hỏng thì bỏ qua
@@ -603,7 +611,8 @@
           allowance: gInputs.allowance.value,
           insuranceBase: gInputs.insuranceBase.value,
           dependents: String(gross.dependents),
-          region: gross.region
+          region: gross.region,
+          linked: salaryLinked
         };
         var isDefault = !data.salary.trim() && !data.gross.trim() && !data.allowance.trim() &&
           !data.insuranceBase.trim() && data.dependents === '0' && data.region === '1' &&
@@ -619,6 +628,7 @@
         if (s) { s.removeItem(STORAGE_KEY); s.removeItem(OLD_STORAGE_KEY); }
       } catch (e) { /* bỏ qua */ }
       inputs.salary.value = '';
+      salaryLinked = true;
       inputs.days.value = String(core.DEFAULTS.days);
       inputs.hours.value = String(core.DEFAULTS.hours);
       gInputs.gross.value = '';
@@ -815,19 +825,29 @@
     }
 
     function updateAll(showErrors) {
-      state = core.evaluate({
-        salary: inputs.salary.value,
-        days: inputs.days.value,
-        hours: inputs.hours.value,
-        name: inputs.name.value,
-        price: inputs.price.value
-      });
       gState = core.evaluateGross({
         gross: gInputs.gross.value,
         allowance: gInputs.allowance.value,
         dependents: gross.dependents,
         insuranceBase: gInputs.insuranceBase.value,
         region: gross.region
+      });
+      if (salaryLinked && gState.result) {
+        inputs.salary.value = core.formatNumber(gState.result.net);
+      }
+      $('salary-sub').setAttribute('data-default', salaryLinked && gState.result
+        ? '✨ Tự lấy từ tab lương'
+        : 'Sau thuế và bảo hiểm');
+      el.footGo.hidden = !!gState.result;
+      el.footRelink.hidden = !gState.result || salaryLinked;
+      if (gState.result) el.relink.textContent = 'Dùng lại ' + core.formatVND(gState.result.net) + ' từ tab lương';
+
+      state = core.evaluate({
+        salary: inputs.salary.value,
+        days: inputs.days.value,
+        hours: inputs.hours.value,
+        name: inputs.name.value,
+        price: inputs.price.value
       });
       renderTime(showErrors);
       renderGross(showErrors);
@@ -996,6 +1016,8 @@
       Object.keys(map).forEach(function (key) {
         var input = map[key];
         input.addEventListener('input', function () {
+          if (key === 'salary') salaryLinked = false;
+          if (map === gInputs) salaryLinked = true;
           updateAll(false);
           if (key !== 'name' && key !== 'price') save();
         });
@@ -1041,6 +1063,7 @@
 
     function setDependents(n) {
       gross.dependents = Math.max(0, Math.min(20, n));
+      salaryLinked = true;
       updateAll(true);
       save();
     }
@@ -1050,6 +1073,7 @@
     el.regions.forEach(function (btn, i) {
       function pick(target) {
         gross.region = target.getAttribute('data-region');
+        salaryLinked = true;
         updateAll(true);
         save();
       }
@@ -1065,12 +1089,17 @@
 
     el.useNet.addEventListener('click', function () {
       if (!gState.result) return;
-      inputs.salary.value = core.formatNumber(gState.result.net);
+      salaryLinked = true;
       showTab('time');
       updateAll(true);
       save();
       window.scrollTo(0, 0);
-      toast('Đã điền lương thực nhận ' + core.formatVND(gState.result.net) + '.');
+    });
+
+    el.relink.addEventListener('click', function () {
+      salaryLinked = true;
+      updateAll(true);
+      save();
     });
 
     $all('form').forEach(function (form) {
