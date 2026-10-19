@@ -268,5 +268,91 @@ test('lương cực cao, giá cực nhỏ -> giây', () => {
   noBadNumbers(out);
 });
 
+/* ---------- Gross -> thực nhận ---------- */
+test('thuế lũy tiến 5 bậc', () => {
+  assert.equal(Q.progressiveTax(0), 0);
+  assert.equal(Q.progressiveTax(10000000), 500000);
+  assert.equal(Q.progressiveTax(11350000), 635000);
+  assert.equal(Q.progressiveTax(30000000), 2500000);
+  assert.equal(Q.progressiveTax(60000000), 8500000);
+  assert.equal(Q.progressiveTax(100000000), 20500000);
+  assert.equal(Q.progressiveTax(120000000), 27500000);
+});
+
+test('gross 30tr, không người phụ thuộc', () => {
+  const g = Q.grossToNet({ gross: 30000000 });
+  assert.equal(g.bhxh, 2400000);
+  assert.equal(g.bhyt, 450000);
+  assert.equal(g.bhtn, 300000);
+  assert.equal(g.insurance, 3150000);
+  assert.equal(g.taxable, 11350000); // 30 - 3,15 - 15,5
+  assert.equal(g.tax, 635000);
+  assert.equal(g.net, 26215000);
+});
+
+test('gross thấp hơn mức giảm trừ -> không thuế', () => {
+  const g = Q.grossToNet({ gross: 15000000 });
+  assert.equal(g.tax, 0);
+  assert.equal(g.net, 15000000 - 1575000);
+});
+
+test('người phụ thuộc làm giảm thuế', () => {
+  const g = Q.grossToNet({ gross: 30000000, dependents: 1 });
+  assert.equal(g.taxable, 5150000);
+  assert.equal(g.tax, 257500);
+});
+
+test('lương đóng BH thấp hơn gross', () => {
+  const g = Q.grossToNet({ gross: 30000000, insuranceBase: 10000000 });
+  assert.equal(g.insurance, 1050000);
+  assert.equal(g.taxable, 13450000);
+});
+
+test('trần bảo hiểm: BHXH/BHYT 50,6tr, BHTN theo vùng', () => {
+  const g = Q.grossToNet({ gross: 100000000 });
+  assert.equal(g.bhxh, 4048000);
+  assert.equal(g.bhyt, 759000);
+  assert.equal(g.bhtn, 1000000); // dưới trần vùng I 106,2tr
+  const g4 = Q.grossToNet({ gross: 100000000, region: 4 });
+  assert.equal(g4.bhtn, 740000); // trần vùng IV 74tr
+  assert.equal(g.net, 100000000 - g.insurance - g.tax);
+});
+
+const grossBase = Object.assign({}, base, { salaryMode: 'gross', salary: '30tr' });
+const evg = (patch) => Q.evaluate(Object.assign({}, grossBase, patch));
+
+test('evaluate ở chế độ gross dùng lương thực nhận ước tính', () => {
+  const out = evg({});
+  assert.equal(out.mode, 'gross');
+  assert.equal(out.netSalary, 26215000);
+  assert.ok(Math.abs(out.hourlyRate - 26215000 / 176) < 1e-9);
+  assert.ok(out.result);
+  noBadNumbers(out);
+});
+
+[['-1', 'invalid'], ['1,5', 'invalid'], ['hai', 'invalid'], ['21', 'invalid']].forEach(([dependents, st]) => {
+  test(`người phụ thuộc "${dependents}" -> ${st}`, () => {
+    const out = evg({ dependents });
+    assert.equal(out.fields.dependents.state, st);
+    assert.equal(out.result, null);
+    assert.ok(out.hint);
+    noBadNumbers(out);
+  });
+});
+
+test('lương đóng BH lớn hơn gross hoặc gõ linh tinh -> báo', () => {
+  assert.equal(evg({ insuranceBase: '40tr' }).fields.insuranceBase.state, 'range');
+  assert.equal(evg({ insuranceBase: 'abc' }).fields.insuranceBase.state, 'invalid');
+  assert.equal(evg({ insuranceBase: '' }).fields.insuranceBase.state, 'ok');
+  noBadNumbers(evg({ insuranceBase: 'abc' }));
+});
+
+test('chế độ thực nhận bỏ qua các ô gross', () => {
+  const out = ev({ dependents: 'linh tinh', insuranceBase: 'abc' });
+  assert.equal(out.netSalary, 15000000);
+  assert.equal(out.fields.dependents, undefined);
+  assert.ok(out.result);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

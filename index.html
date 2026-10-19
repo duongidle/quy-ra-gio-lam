@@ -33,9 +33,14 @@
       <section class="card" aria-labelledby="income-title">
         <h2 id="income-title"><span aria-hidden="true">💼</span> Thu nhập của cậu</h2>
 
+        <div class="seg" id="mode" role="radiogroup" aria-label="Cậu biết lương nào?">
+          <label><input type="radio" name="mode" value="net" checked><span>Thực nhận</span></label>
+          <label><input type="radio" name="mode" value="gross"><span>Gross</span></label>
+        </div>
+
         <div class="field">
           <div class="label-row">
-            <label for="salary">Lương thực nhận mỗi tháng</label>
+            <label for="salary" id="salary-label">Lương thực nhận mỗi tháng</label>
             <span class="preview" id="salary-preview" hidden></span>
           </div>
           <div class="money">
@@ -46,6 +51,47 @@
           </div>
           <p class="note" id="salary-note">Nhập lương thực nhận sau thuế và bảo hiểm, không phải lương gross.</p>
           <p class="msg" id="salary-msg" role="alert" hidden></p>
+        </div>
+
+        <div class="gross" id="gross-fields" hidden>
+          <div class="row">
+            <div class="field">
+              <label for="dependents">Người phụ thuộc</label>
+              <input id="dependents" name="dependents" type="text" inputmode="numeric" enterkeyhint="next"
+                     placeholder="0" aria-describedby="dependents-msg">
+              <p class="msg" id="dependents-msg" role="alert" hidden></p>
+            </div>
+            <div class="field">
+              <label for="region">Vùng lương</label>
+              <select id="region" name="region">
+                <option value="1">Vùng I</option>
+                <option value="2">Vùng II</option>
+                <option value="3">Vùng III</option>
+                <option value="4">Vùng IV</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="label-row">
+              <label for="insurance-base">Lương đóng bảo hiểm <span class="optional">(nếu khác gross)</span></label>
+              <span class="preview" id="insurance-base-preview" hidden></span>
+            </div>
+            <div class="money">
+              <input id="insurance-base" name="insurance-base" type="text" inputmode="text" enterkeyhint="next"
+                     placeholder="Để trống = bằng lương gross" aria-describedby="insurance-base-msg"
+                     spellcheck="false" autocapitalize="off">
+              <span class="suffix" aria-hidden="true">đ</span>
+            </div>
+            <p class="msg" id="insurance-base-msg" role="alert" hidden></p>
+          </div>
+
+          <div class="breakdown" id="breakdown" hidden>
+            <dl id="breakdown-list"></dl>
+            <p class="note">Ước tính theo Luật Thuế TNCN 109/2025/QH15 (biểu 5 bậc, giảm trừ 15,5tr cho bản thân,
+              6,2tr mỗi người phụ thuộc) và mức đóng bảo hiểm từ 1/7/2026. Chưa tính phụ cấp miễn thuế,
+              đoàn phí hay các khoản giảm trừ khác, nên con số thật trên phiếu lương có thể lệch một chút.</p>
+          </div>
         </div>
 
         <div class="row">

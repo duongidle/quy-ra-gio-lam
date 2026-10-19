@@ -244,8 +244,79 @@
     hintSalary: 'Nhập lương thực nhận mỗi tháng để bắt đầu nhé.',
     hintSalaryFix: 'Ô lương đang có gì đó chưa ổn, xem lại giúp tớ nhé.',
     hintSchedule: 'Số ngày hoặc số giờ làm chưa hợp lý, sửa lại giúp tớ nhé.',
-    hintPrice: 'Giờ nhập giá món đồ cậu đang nhắm tới xem.'
+    hintPrice: 'Giờ nhập giá món đồ cậu đang nhắm tới xem.',
+    dependentsInvalid: 'Số người phụ thuộc phải là số nguyên từ 0 đến 20.',
+    insuranceInvalid: 'Tớ chưa đọc được số này. Để trống nếu công ty đóng bảo hiểm theo đúng lương gross.',
+    insuranceTooHigh: 'Lương đóng bảo hiểm thường không cao hơn lương gross. Xem lại giúp tớ nhé.',
+    hintGrossFix: 'Phần quy đổi từ gross đang có ô chưa ổn, xem lại giúp tớ nhé.'
   };
+
+  /*
+   * Quy đổi gross -> thực nhận cho người lao động Việt Nam (hợp đồng từ 3 tháng, cư trú).
+   * - Thuế TNCN: Luật 109/2025/QH15, biểu lũy tiến 5 bậc theo tháng; giảm trừ gia cảnh
+   *   15,5tr cho bản thân + 6,2tr mỗi người phụ thuộc (áp dụng từ kỳ tính thuế 2026).
+   * - Bảo hiểm phần người lao động: BHXH 8%, BHYT 1,5%, BHTN 1%.
+   *   Trần BHXH/BHYT = 20 × lương cơ sở (2.530.000đ từ 1/7/2026).
+   *   Trần BHTN = 20 × lương tối thiểu vùng (NĐ 293/2025, từ 1/1/2026).
+   * Đây là ước tính: chưa tính phụ cấp miễn thuế, đoàn phí, các khoản giảm trừ khác.
+   */
+  var GROSS_RULES = {
+    personalDeduction: 15500000,
+    dependentDeduction: 6200000,
+    brackets: [
+      { upTo: 10000000, rate: 0.05 },
+      { upTo: 30000000, rate: 0.10 },
+      { upTo: 60000000, rate: 0.20 },
+      { upTo: 100000000, rate: 0.30 },
+      { upTo: Infinity, rate: 0.35 }
+    ],
+    bhxhRate: 0.08,
+    bhytRate: 0.015,
+    bhtnRate: 0.01,
+    baseSalary: 2530000,
+    regionalMinimum: { 1: 5310000, 2: 4730000, 3: 4140000, 4: 3700000 }
+  };
+
+  function progressiveTax(taxable) {
+    var tax = 0;
+    var lower = 0;
+    var brackets = GROSS_RULES.brackets;
+    for (var i = 0; i < brackets.length && taxable > lower; i++) {
+      tax += (Math.min(taxable, brackets[i].upTo) - lower) * brackets[i].rate;
+      lower = brackets[i].upTo;
+    }
+    return tax;
+  }
+
+  /**
+   * opts = { gross, dependents = 0, insuranceBase = gross, region = 1 }
+   * Trả về các khoản trừ và lương thực nhận (đều làm tròn đến đồng).
+   */
+  function grossToNet(opts) {
+    var r = GROSS_RULES;
+    var gross = opts.gross;
+    var base = opts.insuranceBase === undefined || opts.insuranceBase === null ? gross : opts.insuranceBase;
+    var minimum = r.regionalMinimum[opts.region] || r.regionalMinimum[1];
+    var socialCap = 20 * r.baseSalary;
+    var bhxh = Math.round(Math.min(base, socialCap) * r.bhxhRate);
+    var bhyt = Math.round(Math.min(base, socialCap) * r.bhytRate);
+    var bhtn = Math.round(Math.min(base, 20 * minimum) * r.bhtnRate);
+    var insurance = bhxh + bhyt + bhtn;
+    var deduction = r.personalDeduction + r.dependentDeduction * (opts.dependents || 0);
+    var taxable = Math.max(0, gross - insurance - deduction);
+    var tax = Math.round(progressiveTax(taxable));
+    return {
+      gross: gross,
+      bhxh: bhxh,
+      bhyt: bhyt,
+      bhtn: bhtn,
+      insurance: insurance,
+      deduction: deduction,
+      taxable: taxable,
+      tax: tax,
+      net: gross - insurance - tax
+    };
+  }
 
   function checkMoney(raw, kind) {
     var text = String(raw === null || raw === undefined ? '' : raw).trim();
@@ -269,9 +340,28 @@
     return { state: 'ok', value: v };
   }
 
+  function checkDependents(raw) {
+    var v = parseCount(raw);
+    if (v === null) return { state: 'ok', value: 0 };
+    if (isNaN(v) || v < 0 || v > 20 || Math.floor(v) !== v) {
+      return { state: 'invalid', message: MSG.dependentsInvalid };
+    }
+    return { state: 'ok', value: v };
+  }
+
+  function checkInsuranceBase(raw, gross) {
+    var text = String(raw === null || raw === undefined ? '' : raw).trim();
+    if (!text) return { state: 'ok', value: null };
+    var v = parseMoney(text);
+    if (v === null || v < 0) return { state: 'invalid', message: MSG.insuranceInvalid };
+    if (gross !== null && v > gross) return { state: 'range', message: MSG.insuranceTooHigh };
+    return { state: 'ok', value: v };
+  }
+
   /**
    * Toàn bộ trạng thái màn hình từ các chuỗi người dùng gõ.
-   * raw = { salary, days, hours, name, price } (đều là chuỗi).
+   * raw = { salary, days, hours, name, price } (đều là chuỗi), cộng thêm khi nhập gross:
+   * salaryMode = 'gross', dependents, insuranceBase, region.
    */
   function evaluate(raw) {
     var f = {
@@ -280,15 +370,36 @@
       hours: checkCount(raw.hours, 'hours'),
       price: checkMoney(raw.price, 'price')
     };
-    var out = { fields: f, hourlyRate: null, result: null, hint: null };
+    var isGross = raw.salaryMode === 'gross';
+    var out = { fields: f, mode: isGross ? 'gross' : 'net', gross: null, netSalary: null, hourlyRate: null, result: null, hint: null };
 
-    var incomeOk = f.salary.state === 'ok' && f.days.state === 'ok' && f.hours.state === 'ok';
+    var grossOk = true;
+    if (isGross) {
+      f.dependents = checkDependents(raw.dependents);
+      f.insuranceBase = checkInsuranceBase(raw.insuranceBase, f.salary.state === 'ok' ? f.salary.value : null);
+      grossOk = f.dependents.state === 'ok' && f.insuranceBase.state === 'ok';
+      if (f.salary.state === 'ok' && grossOk) {
+        out.gross = grossToNet({
+          gross: f.salary.value,
+          dependents: f.dependents.value,
+          insuranceBase: f.insuranceBase.value,
+          region: Number(raw.region) || 1
+        });
+        out.netSalary = out.gross.net;
+      }
+    } else if (f.salary.state === 'ok') {
+      out.netSalary = f.salary.value;
+    }
+
+    var incomeOk = out.netSalary !== null && f.days.state === 'ok' && f.hours.state === 'ok';
     if (incomeOk) {
-      out.hourlyRate = f.salary.value / (f.days.value * f.hours.value);
+      out.hourlyRate = out.netSalary / (f.days.value * f.hours.value);
     }
 
     if (f.salary.state !== 'ok') {
       out.hint = f.salary.state === 'empty' ? MSG.hintSalary : MSG.hintSalaryFix;
+    } else if (!grossOk) {
+      out.hint = MSG.hintGrossFix;
     } else if (!incomeOk) {
       out.hint = MSG.hintSchedule;
     } else if (f.price.state === 'empty') {
@@ -321,6 +432,9 @@
     buildSentence: buildSentence,
     capitalizeFirst: capitalizeFirst,
     quip: quip,
+    GROSS_RULES: GROSS_RULES,
+    progressiveTax: progressiveTax,
+    grossToNet: grossToNet,
     evaluate: evaluate
   };
 
@@ -340,10 +454,33 @@
     var FONT = '"Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif';
 
     function $(id) { return document.getElementById(id); }
-    var inputs = { salary: $('salary'), days: $('days'), hours: $('hours'), name: $('name'), price: $('price') };
-    var msgs = { salary: $('salary-msg'), days: $('days-msg'), hours: $('hours-msg'), price: $('price-msg') };
-    var previews = { salary: $('salary-preview'), price: $('price-preview') };
+    var inputs = {
+      salary: $('salary'), days: $('days'), hours: $('hours'), name: $('name'), price: $('price'),
+      dependents: $('dependents'), insuranceBase: $('insurance-base')
+    };
+    var msgs = {
+      salary: $('salary-msg'), days: $('days-msg'), hours: $('hours-msg'), price: $('price-msg'),
+      dependents: $('dependents-msg'), insuranceBase: $('insurance-base-msg')
+    };
+    var previews = { salary: $('salary-preview'), price: $('price-preview'), insuranceBase: $('insurance-base-preview') };
+    var SALARY_COPY = {
+      net: {
+        label: 'Lương thực nhận mỗi tháng',
+        note: 'Nhập lương thực nhận sau thuế và bảo hiểm, không phải lương gross.'
+      },
+      gross: {
+        label: 'Lương gross mỗi tháng',
+        note: 'Nhập lương gross trên hợp đồng, tớ sẽ trừ bảo hiểm và thuế để ra lương thực nhận.'
+      }
+    };
     var el = {
+      modeRadios: document.querySelectorAll('input[name="mode"]'),
+      salaryLabel: $('salary-label'),
+      salaryNote: $('salary-note'),
+      grossFields: $('gross-fields'),
+      region: $('region'),
+      breakdown: $('breakdown'),
+      breakdownList: $('breakdown-list'),
       form: $('form'),
       hint: $('result-hint'),
       body: $('result-body'),
@@ -387,22 +524,31 @@
       try {
         var saved = JSON.parse(s.getItem(STORAGE_KEY) || 'null');
         if (!saved || typeof saved !== 'object') return;
-        if (typeof saved.salary === 'string') inputs.salary.value = saved.salary;
-        if (typeof saved.days === 'string') inputs.days.value = saved.days;
-        if (typeof saved.hours === 'string') inputs.hours.value = saved.hours;
+        ['salary', 'days', 'hours', 'dependents', 'insuranceBase'].forEach(function (key) {
+          if (typeof saved[key] === 'string') inputs[key].value = saved[key];
+        });
+        if (saved.mode === 'gross' || saved.mode === 'net') setMode(saved.mode);
+        if (/^[1-4]$/.test(saved.region)) el.region.value = saved.region;
       } catch (e) { /* dữ liệu hỏng thì bỏ qua */ }
     }
 
     function save() {
       try {
         var data = {
+          mode: getMode(),
           salary: inputs.salary.value,
           days: inputs.days.value,
-          hours: inputs.hours.value
+          hours: inputs.hours.value,
+          dependents: inputs.dependents.value,
+          insuranceBase: inputs.insuranceBase.value,
+          region: el.region.value
         };
         var s = storage();
         if (!s) return;
-        if (!data.salary.trim() && data.days === String(core.DEFAULTS.days) && data.hours === String(core.DEFAULTS.hours)) {
+        var isDefault = data.mode === 'net' && !data.salary.trim() && !data.dependents.trim() &&
+          !data.insuranceBase.trim() && data.region === '1' &&
+          data.days === String(core.DEFAULTS.days) && data.hours === String(core.DEFAULTS.hours);
+        if (isDefault) {
           s.removeItem(STORAGE_KEY);
         } else {
           s.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -418,6 +564,10 @@
       inputs.salary.value = '';
       inputs.days.value = String(core.DEFAULTS.days);
       inputs.hours.value = String(core.DEFAULTS.hours);
+      inputs.dependents.value = '';
+      inputs.insuranceBase.value = '';
+      el.region.value = '1';
+      setMode('net');
       update(true);
       toast('Đã xoá. Máy này không còn nhớ lương của cậu nữa.');
     }
@@ -435,21 +585,68 @@
       node.hidden = !text;
     }
 
+    function getMode() {
+      for (var i = 0; i < el.modeRadios.length; i++) {
+        if (el.modeRadios[i].checked) return el.modeRadios[i].value;
+      }
+      return 'net';
+    }
+
+    function setMode(mode) {
+      for (var i = 0; i < el.modeRadios.length; i++) {
+        el.modeRadios[i].checked = el.modeRadios[i].value === mode;
+      }
+      applyMode();
+    }
+
+    function applyMode() {
+      var mode = getMode();
+      el.salaryLabel.textContent = SALARY_COPY[mode].label;
+      el.salaryNote.textContent = SALARY_COPY[mode].note;
+      el.grossFields.hidden = mode !== 'gross';
+    }
+
     function renderMessages() {
-      ['salary', 'days', 'hours', 'price'].forEach(function (key) {
+      Object.keys(msgs).forEach(function (key) {
         var f = state.fields[key];
-        var show = f.state !== 'ok' && f.message && !(f.state === 'empty' && (key === 'salary' || key === 'price'));
+        var show = !!f && f.state !== 'ok' && f.message && !(f.state === 'empty' && (key === 'salary' || key === 'price'));
         setText(msgs[key], show ? f.message : '');
         inputs[key].setAttribute('aria-invalid', show ? 'true' : 'false');
       });
     }
 
+    function renderBreakdown() {
+      var g = state.gross;
+      el.breakdown.hidden = !g;
+      if (!g) return;
+      var rows = [
+        ['Lương gross', core.formatVND(g.gross), ''],
+        ['BHXH 8%', '−' + core.formatVND(g.bhxh), ''],
+        ['BHYT 1,5%', '−' + core.formatVND(g.bhyt), ''],
+        ['BHTN 1%', '−' + core.formatVND(g.bhtn), ''],
+        ['Thuế TNCN', g.tax ? '−' + core.formatVND(g.tax) : '0đ', ''],
+        ['Thực nhận ước tính', core.formatVND(g.net), 'total']
+      ];
+      el.breakdownList.textContent = '';
+      rows.forEach(function (row) {
+        var wrap = document.createElement('div');
+        if (row[2]) wrap.className = row[2];
+        var dt = document.createElement('dt');
+        dt.textContent = row[0];
+        var dd = document.createElement('dd');
+        dd.textContent = row[1];
+        wrap.appendChild(dt);
+        wrap.appendChild(dd);
+        el.breakdownList.appendChild(wrap);
+      });
+    }
+
     function renderPreviews() {
-      ['salary', 'price'].forEach(function (key) {
+      Object.keys(previews).forEach(function (key) {
         var f = state.fields[key];
         var raw = inputs[key].value.trim();
         var text = '';
-        if (f.state === 'ok') {
+        if (f && f.state === 'ok' && f.value !== null) {
           var pretty = core.formatNumber(f.value);
           if (raw.replace(/\s*(đ|vnđ|vnd)$/i, '') !== pretty) text = '= ' + core.formatVND(f.value);
         }
@@ -466,7 +663,8 @@
       if (state.hourlyRate !== null) {
         var f = state.fields;
         el.rate.textContent = 'Lương mỗi giờ của cậu: ' + core.formatVND(Math.round(state.hourlyRate)) +
-          '\n= ' + core.formatVND(f.salary.value) + ' ÷ (' + core.formatNumber(f.days.value, 2) +
+          '\n= ' + core.formatVND(state.netSalary) + (state.mode === 'gross' ? ' (thực nhận ước tính)' : '') +
+          ' ÷ (' + core.formatNumber(f.days.value, 2) +
           ' ngày × ' + core.formatNumber(f.hours.value, 2) + ' giờ)';
         el.rate.hidden = false;
       } else {
@@ -509,9 +707,14 @@
         days: inputs.days.value,
         hours: inputs.hours.value,
         name: inputs.name.value,
-        price: inputs.price.value
+        price: inputs.price.value,
+        salaryMode: getMode(),
+        dependents: inputs.dependents.value,
+        insuranceBase: inputs.insuranceBase.value,
+        region: el.region.value
       });
       renderResult();
+      renderBreakdown();
       renderPreviews();
       // Báo lỗi chậm một nhịp để không nhấp nháy khi đang gõ dở ("15 tri…").
       clearTimeout(msgTimer);
@@ -519,7 +722,11 @@
       else msgTimer = setTimeout(renderMessages, 700);
       // Ô nào đã hết lỗi thì gỡ thông báo ngay.
       Object.keys(msgs).forEach(function (key) {
-        if (state.fields[key].state === 'ok') setText(msgs[key], '');
+        var f = state.fields[key];
+        if (!f || f.state === 'ok') {
+          setText(msgs[key], '');
+          inputs[key].setAttribute('aria-invalid', 'false');
+        }
       });
     }
 
@@ -676,17 +883,27 @@
     /* --- Sự kiện --- */
     function reformatMoney(key) {
       var f = state && state.fields[key];
-      if (f && f.state === 'ok') inputs[key].value = core.formatNumber(f.value);
+      if (f && f.state === 'ok' && f.value !== null) inputs[key].value = core.formatNumber(f.value);
       update(true);
     }
 
-    ['salary', 'days', 'hours', 'name', 'price'].forEach(function (key) {
+    Object.keys(inputs).forEach(function (key) {
       inputs[key].addEventListener('input', function () {
         update(false);
-        if (key === 'salary' || key === 'days' || key === 'hours') save();
+        if (key !== 'name' && key !== 'price') save();
       });
     });
     inputs.salary.addEventListener('change', function () { reformatMoney('salary'); save(); });
+    inputs.insuranceBase.addEventListener('change', function () { reformatMoney('insuranceBase'); save(); });
+    inputs.dependents.addEventListener('change', function () { update(true); });
+    el.region.addEventListener('change', function () { update(true); save(); });
+    for (var i = 0; i < el.modeRadios.length; i++) {
+      el.modeRadios[i].addEventListener('change', function () {
+        applyMode();
+        update(true);
+        save();
+      });
+    }
     inputs.price.addEventListener('change', function () { reformatMoney('price'); });
     inputs.days.addEventListener('change', function () { update(true); });
     inputs.hours.addEventListener('change', function () { update(true); });
@@ -708,6 +925,7 @@
     el.clear.addEventListener('click', clearSaved);
 
     load();
+    applyMode();
     update(true);
     // Lần đầu mở trang, ô lương trống thì không cần báo lỗi gì cả.
   }
