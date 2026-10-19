@@ -631,8 +631,179 @@ test('đồng hồ: đủ mấy món, câu toilet', () => {
   assert.equal(Q.formatElapsed(42), '42 giây');
 });
 
+/* ---------- Sổ thu nhập & Google Sheet ---------- */
+test('parseDate: nhiều kiểu gõ, chặn ngày không có thật', () => {
+  assert.equal(Q.parseDate('2026-10-19'), '2026-10-19');
+  assert.equal(Q.parseDate('19/10/2026'), '2026-10-19');
+  assert.equal(Q.parseDate('5-1-2026'), '2026-01-05');
+  assert.equal(Q.parseDate('5.1.2026'), '2026-01-05');
+  assert.equal(Q.parseDate('2026-1-5T00:00:00.000Z'), '2026-01-05');
+  assert.equal(Q.parseDate('29/02/2028'), '2028-02-29');
+  for (const bad of ['', null, undefined, '29/02/2026', '31/04/2026', '00/01/2026', '1/13/2026', 'hôm qua', '2026/10/19', '19/10/26', '1/1/1800']) {
+    assert.equal(Q.parseDate(bad), null, String(bad));
+  }
+  assert.equal(Q.formatDate('2026-01-05'), '05/01/2026');
+});
+
+test('incomeType đọc nhãn gõ tay trên sheet', () => {
+  const cases = [['Lương', 'salary'], ['luong thang 10', 'salary'], ['LƯƠNG', 'salary'], ['Thưởng Tết', 'bonus'],
+    ['bonus', 'bonus'], ['Làm thêm', 'extra'], ['tăng ca', 'extra'], ['OT', 'extra'], ['Freelance', 'extra'],
+    ['salary', 'salary'], ['Khác', 'other'], ['', 'other'], [null, 'other'], ['bán đồ cũ', 'other']];
+  for (const [label, key] of cases) assert.equal(Q.incomeType(label), key, String(label));
+  assert.equal(Q.incomeLabel('extra'), 'Làm thêm');
+  assert.equal(Q.incomeLabel('???'), 'Khác');
+});
+
+test('normalizeIncome: bỏ dòng hỏng, đếm lại, sắp theo ngày', () => {
+  const n = Q.normalizeIncome([
+    { id: 'b', date: '2026-02-01', type: 'Thưởng', amount: '5tr', note: '  Tết  ' },
+    { id: 'a', date: '15/01/2026', type: 'Lương', amount: 15000000.4 },
+    { id: 'c', date: 'không rõ', type: 'Lương', amount: 1000 },
+    { id: 'd', date: '2026-03-01', type: 'Lương', amount: 'abc' },
+    { id: 'e', date: '2026-03-01', type: 'Lương', amount: -5 },
+    { id: 'f', date: '2026-03-01', type: 'Lương', amount: 0 },
+    { id: 'g', date: '2026-03-01', type: 'Lương', amount: 1e20 },
+    null, 'chuỗi', { date: '2026-04-01', amount: 100000 }
+  ]);
+  assert.equal(n.skipped, 7);
+  assert.deepEqual(n.entries.map((e) => e.id), ['a', 'b', 'row-9']);
+  assert.equal(n.entries[0].amount, 15000000);
+  assert.equal(n.entries[1].note, 'Tết');
+  assert.equal(n.entries[2].type, 'other');
+  assert.deepEqual(Q.normalizeIncome('rác'), { entries: [], skipped: 0 });
+});
+
+test('checkIncome: lỗi nhẹ nhàng, không ra NaN', () => {
+  const ok = Q.checkIncome({ amount: '15tr', date: '2026-10-05', type: 'bonus', note: ' Tết ' });
+  assert.deepEqual(ok.entry, { date: '2026-10-05', type: 'bonus', amount: 15000000, note: 'Tết' });
+  assert.equal(Q.checkIncome({ amount: '', date: '2026-10-05', type: 'salary' }).errors.amount, Q.MSG.incomeEmpty);
+  assert.equal(Q.checkIncome({ amount: '0', date: '2026-10-05', type: 'salary' }).errors.amount, Q.MSG.incomeZero);
+  assert.equal(Q.checkIncome({ amount: 'abc', date: '2026-10-05', type: 'salary' }).errors.amount, Q.MSG.incomeInvalid);
+  assert.equal(Q.checkIncome({ amount: '-5tr', date: '2026-10-05', type: 'salary' }).errors.amount, Q.MSG.incomeNegative);
+  assert.equal(Q.checkIncome({ amount: '9e99', date: '2026-10-05', type: 'salary' }).entry, null);
+  const badDate = Q.checkIncome({ amount: '1tr', date: '', type: 'salary' });
+  assert.equal(badDate.entry, null);
+  assert.equal(badDate.errors.date, Q.MSG.dateInvalid);
+  assert.equal(Q.checkIncome({ amount: '1tr', date: '2026-01-01', type: 'hack' }).entry.type, 'other');
+});
+
+const book = Q.normalizeIncome([
+  { id: '1', date: '2025-01-10', type: 'Lương', amount: 10000000 },
+  { id: '2', date: '2025-06-10', type: 'Lương', amount: 10000000 },
+  { id: '3', date: '2025-12-20', type: 'Thưởng', amount: 20000000 },
+  { id: '4', date: '2026-01-10', type: 'Lương', amount: 12000000 },
+  { id: '5', date: '2026-02-10', type: 'Lương', amount: 12000000 },
+  { id: '6', date: '2026-02-14', type: 'Thưởng', amount: 6000000 },
+  { id: '7', date: '2026-03-02', type: 'Làm thêm', amount: 3000000 }
+]).entries;
+
+test('summarizeIncome: năm đang chạy so với cùng kỳ năm trước', () => {
+  const r = Q.summarizeIncome(book, 2026, '2026-03-31');
+  assert.equal(r.total, 33000000);
+  assert.equal(r.count, 4);
+  assert.deepEqual(r.byType, { salary: 24000000, bonus: 6000000, extra: 3000000, other: 0 });
+  assert.equal(r.months[1].total, 18000000);
+  assert.equal(r.best.month, 2);
+  assert.equal(r.elapsedMonths, 3);
+  assert.equal(r.avgPerMonth, 11000000);
+  assert.equal(r.perDay, 33000000 / 90);
+  assert.equal(r.prevTotal, 10000000); // cùng kỳ 2025 chỉ có tháng 1
+  assert.equal(r.change, 2.3);
+  assert.equal(r.salaryMonths, 2);
+  assert.equal(r.monthsWithIncome, 3);
+  assert.deepEqual(r.years, [{ year: 2025, total: 40000000 }, { year: 2026, total: 33000000 }]);
+  noBadNumbers(r);
+});
+
+test('summarizeIncome: năm đã qua tính trọn, năm chưa tới, sổ trống', () => {
+  const past = Q.summarizeIncome(book, 2025, '2026-03-31');
+  assert.equal(past.total, 40000000);
+  assert.equal(past.elapsedMonths, 12);
+  assert.equal(past.perDay, 40000000 / 365);
+  assert.equal(past.prevTotal, null);
+  assert.equal(past.change, null);
+  const future = Q.summarizeIncome(book, 2027, '2026-03-31');
+  assert.equal(future.future, true);
+  assert.equal(future.avgPerMonth, null);
+  assert.equal(future.perDay, null);
+  const empty = Q.summarizeIncome([], 2026, '2026-10-19');
+  assert.equal(empty.total, 0);
+  assert.equal(empty.best, null);
+  assert.equal(empty.change, null);
+  noBadNumbers(empty);
+  noBadNumbers(Q.summarizeIncome(undefined, 2026, '2026-02-29'));
+});
+
+test('summarizeIncome: mới ghi từ giữa năm thì trung bình tính từ tháng đầu có ghi', () => {
+  const r = Q.summarizeIncome(Q.normalizeIncome([{ id: 'x', date: '2026-09-05', type: 'Lương', amount: 20000000 },
+    { id: 'y', date: '2026-10-05', type: 'Lương', amount: 20000000 }]).entries, 2026, '2026-10-31');
+  assert.equal(r.firstMonth, 9);
+  assert.equal(r.elapsedMonths, 2);
+  assert.equal(r.avgPerMonth, 20000000);
+  assert.equal(r.perDay, 40000000 / 61);
+});
+
+test('incomeQuip đúng mức, không sót placeholder', () => {
+  const levels = [[null, 0], [0.5, 1], [0.05, 2], [-0.1, 3], [-0.4, 4]];
+  for (const [c, k] of levels) {
+    const q = Q.incomeQuip(c, 'seed');
+    assert.ok(!/[{}]/.test(q), q);
+    const lines = Q.INCOME_QUIPS[k].lines.map((l) => l.replace('{pct}', c === null ? '' : Q.formatPct(c)));
+    assert.ok(lines.includes(q), q);
+  }
+  assert.equal(Q.formatPct(0.054), '5,4%');
+  assert.equal(Q.formatPct(-0.25), '25%');
+});
+
+test('moneyParts gọn cho số to', () => {
+  assert.deepEqual(Q.moneyParts(312500000), [['312,5', 'triệu']]);
+  assert.deepEqual(Q.moneyParts(15250000), [['15,25', 'triệu']]);
+  assert.deepEqual(Q.moneyParts(1234000000), [['1,23', 'tỷ']]);
+  assert.deepEqual(Q.moneyParts(850000), [['850.000', 'đ']]);
+});
+
+test('checkScriptUrl chỉ nhận link Web app /exec', () => {
+  const id = 'AKfycbx1234567890abcdefghijkLMNOP_-';
+  assert.equal(Q.checkScriptUrl(' https://script.google.com/macros/s/' + id + '/exec ').value,
+    'https://script.google.com/macros/s/' + id + '/exec');
+  assert.equal(Q.checkScriptUrl('https://script.google.com/macros/s/' + id + '/exec?x=1').value,
+    'https://script.google.com/macros/s/' + id + '/exec');
+  assert.equal(Q.checkScriptUrl('https://script.google.com/a/macros/congty.vn/s/' + id + '/exec').state, 'ok');
+  assert.equal(Q.checkScriptUrl('').state, 'empty');
+  assert.equal(Q.checkScriptUrl('https://docs.google.com/spreadsheets/d/abc/edit').state, 'sheet');
+  assert.equal(Q.checkScriptUrl('https://script.google.com/macros/s/' + id + '/dev').state, 'dev');
+  assert.equal(Q.checkScriptUrl('https://script.google.com/home/projects/abc/edit').state, 'editor');
+  for (const bad of ['http://script.google.com/macros/s/' + id + '/exec', 'https://evil.com/macros/s/' + id + '/exec',
+    'https://script.google.com.evil.com/macros/s/' + id + '/exec', 'https://script.google.com/macros/s/short/exec',
+    'https://script.google.com/macros/s/' + id + '/execx', 'javascript:alert(1)']) {
+    assert.equal(Q.checkScriptUrl(bad).state, 'invalid', bad);
+  }
+});
+
+test('readSheetReply: chịu được phản hồi hỏng', () => {
+  const ok = Q.readSheetReply(JSON.stringify({ ok: true, sheet: 'Tài chính', income: [
+    { id: 'a', date: '2026-10-01', type: 'Lương', amount: 15000000, note: '' },
+    { id: 'b', date: '', type: '', amount: '', note: '' }] }));
+  assert.equal(ok.ok, true);
+  assert.equal(ok.name, 'Tài chính');
+  assert.equal(ok.entries.length, 1);
+  assert.equal(ok.skipped, 1);
+  assert.deepEqual(Q.readSheetReply('<html>Đăng nhập</html>'), { ok: false, error: 'not-json' });
+  assert.equal(Q.readSheetReply('null').ok, false);
+  assert.equal(Q.readSheetReply('{"ok":false,"error":"not-found"}').error, 'not-found');
+  assert.equal(Q.readSheetReply('{"ok":true}').entries, undefined);
+});
+
+test('sheetRow ghi nhãn tiếng Việt; mã Apps Script hợp lệ', () => {
+  assert.deepEqual(Q.sheetRow({ id: 'x', date: '2026-10-01', type: 'extra', amount: 5, note: '' }),
+    { id: 'x', date: '2026-10-01', type: 'Làm thêm', amount: 5, note: '' });
+  assert.doesNotThrow(() => new Function(Q.APPS_SCRIPT));
+  assert.match(Q.APPS_SCRIPT, /function doGet/);
+  assert.match(Q.APPS_SCRIPT, /function doPost/);
+});
+
 test('kho câu mới: không câu nào trùng, mỗi mức đủ 3 câu', () => {
-  const pools = [Q.TIME_QUIPS, Q.TAX_QUIPS, Q.INSTALLMENT_QUIPS, Q.OFFER_QUIPS, Q.SAVING_QUIPS, Q.HABIT_QUIPS, Q.TOILET_QUIPS];
+  const pools = [Q.TIME_QUIPS, Q.TAX_QUIPS, Q.INSTALLMENT_QUIPS, Q.OFFER_QUIPS, Q.SAVING_QUIPS, Q.HABIT_QUIPS, Q.TOILET_QUIPS, Q.INCOME_QUIPS];
   const all = pools.flatMap((p) => p.flatMap((b) => b.lines)).concat(Q.NET_TO_GROSS_QUIPS);
   assert.equal(new Set(all).size, all.length);
   pools.forEach((p) => p.forEach((b) => assert.ok(b.lines.length >= 3)));

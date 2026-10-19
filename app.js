@@ -394,7 +394,16 @@
     hintOffersFix: 'Có ô của offer đang chưa ổn, xem lại giúp tớ nhé.',
     hintHabits: 'Nhập giá một thói quen bên dưới xem nó ăn bao nhiêu ngày công.',
     timesInvalid: 'Số lần phải là số lớn hơn 0, ví dụ 5.',
-    hintNeedSalary: 'Cần lương về tay ở tab Quy ra giờ trước đã nhé.'
+    hintNeedSalary: 'Cần lương về tay ở tab Quy ra giờ trước đã nhé.',
+    incomeEmpty: 'Nhập số tiền nhận được nhé.',
+    incomeZero: 'Nhận 0 đồng thì khỏi ghi 😅',
+    incomeInvalid: 'Tớ chưa đọc được số này. Thử kiểu 15tr, 2,5tr hoặc 800k nhé.',
+    incomeNegative: 'Khoản thu phải là số dương nha.',
+    dateInvalid: 'Ngày này chưa ổn, chọn lại giúp tớ nhé.',
+    urlInvalid: 'Link phải có dạng https://script.google.com/macros/s/…/exec nhé.',
+    urlIsSheet: 'Đây là link trang tính. Cần link Web app của Apps Script (đuôi /exec) cơ.',
+    urlIsDev: 'Đây là link thử (/dev). Bấm Triển khai → Tùy chọn triển khai mới để lấy link /exec nhé.',
+    urlIsEditor: 'Đây là link trình soạn mã. Cần link Web app sau khi Triển khai (đuôi /exec).'
   };
 
   /*
@@ -1070,6 +1079,356 @@
     return '';
   }
 
+  /* ===================== SỔ THU NHẬP & GOOGLE SHEET ===================== */
+
+  // Loại khoản thu. Trên Google Sheet ghi bằng nhãn tiếng Việt cho dễ đọc, app đọc ngược lại bằng incomeType().
+  var INCOME_TYPES = [
+    { key: 'salary', label: 'Lương' },
+    { key: 'bonus', label: 'Thưởng' },
+    { key: 'extra', label: 'Làm thêm' },
+    { key: 'other', label: 'Khác' }
+  ];
+  var MAX_INCOME_ROWS = 5000;
+
+  function plain(text) {
+    return String(text === null || text === undefined ? '' : text).toLowerCase().trim()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/\s+/g, ' ');
+  }
+
+  // Nhãn gõ tay trên sheet ("lương", "Thưởng Tết", "OT", "freelance"…) -> key. Không nhận ra thì là 'other'.
+  function incomeType(label) {
+    var t = plain(label);
+    for (var i = 0; i < INCOME_TYPES.length; i++) {
+      if (t === INCOME_TYPES[i].key || t === plain(INCOME_TYPES[i].label)) return INCOME_TYPES[i].key;
+    }
+    if (/^luong/.test(t)) return 'salary';
+    if (/^thuong|bonus/.test(t)) return 'bonus';
+    if (/^(lam them|tang ca|ot\b|overtime|freelance|job phu|viec phu)/.test(t)) return 'extra';
+    return 'other';
+  }
+
+  function incomeLabel(key) {
+    for (var i = 0; i < INCOME_TYPES.length; i++) if (INCOME_TYPES[i].key === key) return INCOME_TYPES[i].label;
+    return 'Khác';
+  }
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  // "2026-10-19", "19/10/2026", "19-10-2026", "19.10.2026" -> "2026-10-19". Ngày không có thật -> null.
+  function parseDate(input) {
+    var s = String(input === null || input === undefined ? '' : input).trim();
+    var y, m, d, hit;
+    if ((hit = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:T.*)?$/.exec(s))) { y = +hit[1]; m = +hit[2]; d = +hit[3]; }
+    else if ((hit = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(s))) { d = +hit[1]; m = +hit[2]; y = +hit[3]; }
+    else return null;
+    if (y < 1900 || y > 2200 || m < 1 || m > 12 || d < 1) return null;
+    var days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    if (d > days) return null;
+    return y + '-' + pad2(m) + '-' + pad2(d);
+  }
+
+  function formatDate(iso) {
+    var p = iso.split('-');
+    return p[2] + '/' + p[1] + '/' + p[0];
+  }
+
+  /**
+   * Dòng đọc từ sheet (hoặc bộ nhớ máy) -> khoản thu sạch { id, date, type, amount, note }.
+   * Dòng gõ tay trên sheet có thể sai đủ kiểu: dòng nào không đọc được ngày hoặc số tiền thì bỏ qua và đếm lại.
+   */
+  function normalizeIncome(rows) {
+    var entries = [];
+    var skipped = 0;
+    (Array.isArray(rows) ? rows : []).slice(0, MAX_INCOME_ROWS).forEach(function (r, i) {
+      if (!r || typeof r !== 'object') { skipped++; return; }
+      var date = parseDate(r.date);
+      var amount = typeof r.amount === 'number' ? Math.round(r.amount) : parseMoney(r.amount);
+      if (!date || amount === null || !isFinite(amount) || amount <= 0 || amount > MAX_MONEY) { skipped++; return; }
+      entries.push({
+        id: String(r.id || 'row-' + i).slice(0, 40),
+        date: date,
+        type: incomeType(r.type),
+        amount: amount,
+        note: String(r.note === null || r.note === undefined ? '' : r.note).trim().slice(0, 200)
+      });
+    });
+    entries.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    return { entries: entries, skipped: skipped };
+  }
+
+  // Ô "Ghi khoản thu": trả { entry, errors }. entry chưa có id (giao diện tự tạo).
+  function checkIncome(raw) {
+    var errors = {};
+    var money = checkMoney(raw.amount, 'price');
+    if (money.state === 'empty') errors.amount = MSG.incomeEmpty;
+    else if (money.state === 'zero') errors.amount = MSG.incomeZero;
+    else if (money.state === 'invalid') errors.amount = MSG.incomeInvalid;
+    else if (money.state !== 'ok') errors.amount = money.state === 'tooLarge' ? MSG.tooLarge : MSG.incomeNegative;
+    var date = parseDate(raw.date);
+    if (!date) errors.date = MSG.dateInvalid;
+    var type = INCOME_TYPES.some(function (t) { return t.key === raw.type; }) ? raw.type : 'other';
+    if (errors.amount || errors.date) return { entry: null, errors: errors };
+    return {
+      entry: { date: date, type: type, amount: money.value, note: String(raw.note || '').trim().slice(0, 200) },
+      errors: errors
+    };
+  }
+
+  function yearOf(iso) { return Number(iso.slice(0, 4)); }
+  function monthOf(iso) { return Number(iso.slice(5, 7)); }
+
+  function dayOfYear(iso) {
+    var y = yearOf(iso);
+    return Math.round((Date.UTC(y, monthOf(iso) - 1, Number(iso.slice(8, 10))) - Date.UTC(y, 0, 1)) / 864e5) + 1;
+  }
+
+  function daysInYear(y) { return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365; }
+
+  function emptyByType() {
+    var o = {};
+    INCOME_TYPES.forEach(function (t) { o[t.key] = 0; });
+    return o;
+  }
+
+  /**
+   * Bức tranh thu nhập một năm, từ ngày tới năm. today là "YYYY-MM-DD" (truyền vào để hàm thuần, dễ test).
+   * - Năm đang chạy: trung bình tính trên số tháng/ngày đã qua; so với cùng kỳ năm trước (tới cùng ngày).
+   * - Năm đã qua: tính trọn năm, so với trọn năm trước.
+   */
+  function summarizeIncome(entries, year, today) {
+    var months = [];
+    for (var i = 0; i < 12; i++) months.push({ month: i + 1, total: 0, count: 0, byType: emptyByType() });
+    var byType = emptyByType();
+    var total = 0, count = 0, prevTotal = 0, prevCount = 0;
+    var yearsMap = {};
+    var thisYear = yearOf(today);
+    var cutoff = (year - 1) + today.slice(4); // cùng ngày của năm trước
+    if (cutoff.slice(5) === '02-29') cutoff = (year - 1) + '-02-28';
+    var current = year === thisYear;
+
+    (entries || []).forEach(function (e) {
+      var y = yearOf(e.date);
+      yearsMap[y] = (yearsMap[y] || 0) + e.amount;
+      if (y === year) {
+        var m = months[monthOf(e.date) - 1];
+        m.total += e.amount;
+        m.count++;
+        m.byType[e.type] = (m.byType[e.type] || 0) + e.amount;
+        byType[e.type] = (byType[e.type] || 0) + e.amount;
+        total += e.amount;
+        count++;
+      } else if (y === year - 1 && (!current || e.date <= cutoff)) {
+        prevTotal += e.amount;
+        prevCount++;
+      }
+    });
+
+    // Mới bắt đầu ghi sổ giữa năm thì tính trung bình từ tháng đầu tiên có ghi, đừng chia cho cả những tháng chưa ghi
+    var firstMonth = 1;
+    var hasEarlier = (entries || []).some(function (e) { return yearOf(e.date) < year; });
+    if (!hasEarlier) {
+      for (var k = 0; k < 12; k++) if (months[k].count) { firstMonth = k + 1; break; }
+    }
+    var lastMonth = year < thisYear ? 12 : current ? monthOf(today) : 0;
+    var elapsedMonths = Math.max(0, lastMonth - firstMonth + 1);
+    var startDay = dayOfYear(year + '-' + pad2(firstMonth) + '-01');
+    var endDay = year < thisYear ? daysInYear(year) : current ? dayOfYear(today) : 0;
+    var elapsedDays = Math.max(0, endDay - startDay + 1);
+    var best = null;
+    months.forEach(function (m) { if (m.total > 0 && (!best || m.total > best.total)) best = m; });
+    var years = Object.keys(yearsMap).map(Number).sort(function (a, b) { return a - b; })
+      .map(function (y) { return { year: y, total: yearsMap[y] }; });
+
+    return {
+      year: year,
+      current: current,
+      future: year > thisYear,
+      total: total,
+      count: count,
+      byType: byType,
+      months: months,
+      firstMonth: firstMonth,
+      elapsedMonths: elapsedMonths,
+      avgPerMonth: elapsedMonths ? total / elapsedMonths : null,
+      perDay: elapsedDays ? total / elapsedDays : null,
+      monthsWithIncome: months.filter(function (m) { return m.total > 0; }).length,
+      salaryMonths: months.filter(function (m) { return m.byType.salary > 0; }).length,
+      best: best,
+      prevTotal: prevCount ? prevTotal : null,
+      change: prevCount && prevTotal > 0 ? (total - prevTotal) / prevTotal : null,
+      years: years
+    };
+  }
+
+  var INCOME_QUIPS = [
+    { upTo: function (c) { return c === null; }, lines: [
+      'Năm đầu ghi sổ. Ghi đều tay, cuối năm tự thấy bức tranh.',
+      'Sổ còn mỏng. Từ từ nó dày lên nha.',
+      'Chưa có năm ngoái để so. Năm nay làm mốc luôn!'
+    ] },
+    { upTo: function (c) { return c >= 0.2; }, lines: [
+      'Hơn cùng kỳ năm ngoái {pct}. Lên level rồi! 📈',
+      'Tăng {pct} so với năm ngoái. Khao tớ ly trà sữa đi.',
+      'Năm nay hơn hẳn {pct}. Ngon lành cành đào!'
+    ] },
+    { upTo: function (c) { return c >= 0; }, lines: [
+      'Nhỉnh hơn năm ngoái {pct}. Ổn áp.',
+      'Tăng {pct}. Không bùng nổ nhưng vẫn là tăng.',
+      'Hơn năm ngoái {pct}. Đủ bù vật giá chưa thì chưa biết 😅'
+    ] },
+    { upTo: function (c) { return c >= -0.15; }, lines: [
+      'Hụt {pct} so với cùng kỳ. Hơi chững.',
+      'Kém năm ngoái {pct}. Chưa toang, nhưng để ý nha.',
+      'Giảm {pct}. Năm nay hơi khó thở.'
+    ] },
+    { upTo: function () { return true; }, lines: [
+      'Hụt tận {pct} so với năm ngoái. Thắt lưng thôi.',
+      'Giảm {pct}. Năm nay đúng là năm đóng học phí cuộc đời.',
+      'Kém năm ngoái {pct}. Bình tĩnh, năm sau gỡ.'
+    ] }
+  ];
+
+  function formatPct(ratio) {
+    var a = Math.abs(ratio) * 100;
+    return formatNumber(a, a < 10 ? 1 : 0) + '%';
+  }
+
+  function incomeQuip(change, seed) {
+    for (var i = 0; i < INCOME_QUIPS.length; i++) {
+      if (INCOME_QUIPS[i].upTo(change)) {
+        return pickLine(INCOME_QUIPS[i].lines, seed).replace('{pct}', change === null ? '' : formatPct(change));
+      }
+    }
+    return '';
+  }
+
+  // Số to trên khung kết quả: 312.500.000 -> [['312,5', 'triệu']] để vừa màn điện thoại.
+  function moneyParts(v) {
+    if (v >= 1e9) return [[formatNumber(v / 1e9, 2), 'tỷ']];
+    if (v >= 1e6) return [[formatNumber(v / 1e6, v >= 1e8 ? 1 : 2), 'triệu']];
+    return [[formatNumber(v), 'đ']];
+  }
+
+  /*
+   * Link Web app của Apps Script. Chỉ nhận đúng dạng https://script.google.com/macros/s/<id>/exec
+   * (hoặc /a/macros/<tên miền>/s/<id>/exec với Google Workspace): app chỉ gửi khoản thu tới đúng chỗ này.
+   */
+  function checkScriptUrl(raw) {
+    var s = String(raw === null || raw === undefined ? '' : raw).trim();
+    if (!s) return { state: 'empty' };
+    var hit = /^https:\/\/script\.google\.com\/(?:a\/macros\/[A-Za-z0-9.\-]+|macros)\/s\/[A-Za-z0-9_\-]{20,}\/exec(?=$|[?#])/.exec(s);
+    if (hit) return { state: 'ok', value: hit[0] };
+    if (/docs\.google\.com\/spreadsheets/.test(s)) return { state: 'sheet', message: MSG.urlIsSheet };
+    if (/script\.google\.com\/.*\/dev(?:$|[?#])/.test(s)) return { state: 'dev', message: MSG.urlIsDev };
+    if (/script\.google\.com\/(home|d\/)/.test(s)) return { state: 'editor', message: MSG.urlIsEditor };
+    return { state: 'invalid', message: MSG.urlInvalid };
+  }
+
+  // Phản hồi từ Apps Script -> { ok, entries, skipped, name } hoặc { ok: false, error }.
+  function readSheetReply(text) {
+    var data;
+    try { data = JSON.parse(text); } catch (e) { return { ok: false, error: 'not-json' }; }
+    if (!data || typeof data !== 'object' || data.ok !== true) {
+      return { ok: false, error: data && typeof data.error === 'string' ? data.error.slice(0, 200) : 'bad-reply' };
+    }
+    var out = { ok: true, name: typeof data.sheet === 'string' ? data.sheet.slice(0, 100) : '' };
+    if (Array.isArray(data.income)) {
+      var n = normalizeIncome(data.income);
+      out.entries = n.entries;
+      out.skipped = n.skipped;
+    }
+    return out;
+  }
+
+  // Khoản thu gửi lên sheet: ghi loại bằng nhãn tiếng Việt cho người mở sheet đọc được.
+  function sheetRow(entry) {
+    return { id: entry.id, date: entry.date, type: incomeLabel(entry.type), amount: entry.amount, note: entry.note || '' };
+  }
+
+  // Mã Apps Script người dùng dán vào Google Sheet của họ (Tiện ích mở rộng → Apps Script).
+  var APPS_SCRIPT = [
+    '// Quy ra giờ làm: cầu nối giữa app và Google Sheet này.',
+    '// App chỉ đọc/ghi trang tính "Thu nhập". Ai có link /exec đều đọc được, giữ link như mật khẩu.',
+    "var SHEET = 'Thu nhập';",
+    "var HEAD = ['ID', 'Ngày', 'Loại', 'Số tiền', 'Ghi chú'];",
+    '',
+    'function sheet_() {',
+    '  var ss = SpreadsheetApp.getActiveSpreadsheet();',
+    '  var sh = ss.getSheetByName(SHEET) || ss.insertSheet(SHEET);',
+    '  if (sh.getLastRow() === 0) {',
+    '    sh.appendRow(HEAD);',
+    '    sh.setFrozenRows(1);',
+    "    sh.getRange('B:B').setNumberFormat('dd/mm/yyyy');",
+    "    sh.getRange('D:D').setNumberFormat('#,##0');",
+    '  }',
+    '  return sh;',
+    '}',
+    '',
+    'function reply_(obj) {',
+    '  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);',
+    '}',
+    '',
+    'function list_(sh) {',
+    '  var n = sh.getLastRow() - 1;',
+    '  if (n < 1) return [];',
+    '  var tz = Session.getScriptTimeZone();',
+    '  var values = sh.getRange(2, 1, n, 5).getValues();',
+    '  var rows = [], dirty = false;',
+    '  values.forEach(function (v) {',
+    "    if (v[1] === '' && v[3] === '') return;",
+    '    if (!v[0]) { v[0] = Utilities.getUuid().slice(0, 8); dirty = true; }',
+    "    var d = v[1] instanceof Date ? Utilities.formatDate(v[1], tz, 'yyyy-MM-dd') : String(v[1]);",
+    '    rows.push({ id: String(v[0]), date: d, type: String(v[2]), amount: v[3], note: String(v[4]) });',
+    '  });',
+    '  // Dòng gõ tay chưa có ID thì điền thêm, để app xoá đúng dòng',
+    '  if (dirty) sh.getRange(2, 1, n, 1).setValues(values.map(function (v) { return [v[0]]; }));',
+    '  return rows;',
+    '}',
+    '',
+    'function safe_(text) {',
+    "  text = String(text || '').slice(0, 200);",
+    "  return /^[=+\\-@]/.test(text) ? \"'\" + text : text;",
+    '}',
+    '',
+    'function doGet() {',
+    '  try {',
+    '    var sh = sheet_();',
+    '    return reply_({ ok: true, v: 1, sheet: SpreadsheetApp.getActiveSpreadsheet().getName(), income: list_(sh) });',
+    '  } catch (err) {',
+    '    return reply_({ ok: false, error: String(err) });',
+    '  }',
+    '}',
+    '',
+    'function doPost(e) {',
+    '  var lock = LockService.getScriptLock();',
+    '  try {',
+    '    lock.waitLock(10000);',
+    '    var req = JSON.parse(e.postData.contents);',
+    '    var sh = sheet_();',
+    "    if (req.action === 'add') {",
+    '      (req.entries || []).slice(0, 500).forEach(function (x) {',
+    "        var p = String(x.date).split('-');",
+    '        sh.appendRow([safe_(x.id), new Date(+p[0], +p[1] - 1, +p[2]), safe_(x.type), Number(x.amount) || 0, safe_(x.note)]);',
+    '      });',
+    '      return reply_({ ok: true });',
+    '    }',
+    "    if (req.action === 'delete') {",
+    '      var n = sh.getLastRow() - 1;',
+    '      var ids = n > 0 ? sh.getRange(2, 1, n, 1).getValues() : [];',
+    '      for (var i = ids.length - 1; i >= 0; i--) {',
+    '        if (String(ids[i][0]) === String(req.id)) { sh.deleteRow(i + 2); return reply_({ ok: true }); }',
+    '      }',
+    "      return reply_({ ok: false, error: 'not-found' });",
+    '    }',
+    "    return reply_({ ok: false, error: 'unknown-action' });",
+    '  } catch (err) {',
+    '    return reply_({ ok: false, error: String(err) });',
+    '  } finally {',
+    '    lock.releaseLock();',
+    '  }',
+    '}'
+  ].join('\n');
+
   var Core = {
     DEFAULTS: DEFAULTS,
     MAX_MONEY: MAX_MONEY,
@@ -1112,7 +1471,24 @@
     affordable: affordable,
     TOILET_QUIPS: TOILET_QUIPS,
     toiletQuip: toiletQuip,
-    formatElapsed: formatElapsed
+    formatElapsed: formatElapsed,
+    INCOME_TYPES: INCOME_TYPES,
+    incomeType: incomeType,
+    incomeLabel: incomeLabel,
+    parseDate: parseDate,
+    formatDate: formatDate,
+    normalizeIncome: normalizeIncome,
+    checkIncome: checkIncome,
+    summarizeIncome: summarizeIncome,
+    INCOME_QUIPS: INCOME_QUIPS,
+    incomeQuip: incomeQuip,
+    formatPct: formatPct,
+    moneyParts: moneyParts,
+    checkScriptUrl: checkScriptUrl,
+    readSheetReply: readSheetReply,
+    sheetRow: sheetRow,
+    APPS_SCRIPT: APPS_SCRIPT,
+    MSG: MSG
   };
 
   if (typeof module === 'object' && module.exports) module.exports = Core;
@@ -1160,10 +1536,22 @@
     // Lương về tay ở tab giờ làm tự đi theo kết quả tab Cầm về, cho tới khi người dùng tự gõ số khác.
     // Ai sửa sau cùng thì thắng: chỉnh lại bên tab Cầm về thì nó lại đồng bộ.
     var salaryLinked = true;
+    // Sổ thu nhập. Chưa nối sheet: nằm trên máy (localIncome). Đã nối: chỉ đọc từ sheet, không lưu lại trên máy.
+    var localIncome = [];
+    var sheetIncome = [];
+    var sheet = { url: '', status: 'off', name: '', error: '', skipped: 0 };
+    var incType = 'salary';
+    var incAuto = true;
+    var incError = {};
+    var incBusy = false;
+    var ovYear = new Date().getFullYear();
+    var ovMonth = 0;
+    var lastOverview = '';
+    var storageBlocked = false;
 
     var el = {
       tabs: $all('[role="tab"]'),
-      panels: { gross: $('panel-gross'), time: $('panel-time'), habit: $('panel-habit'), clock: $('panel-clock'), data: $('panel-data') },
+      panels: { overview: $('panel-overview'), gross: $('panel-gross'), time: $('panel-time'), habit: $('panel-habit'), clock: $('panel-clock'), data: $('panel-data') },
       savedList: $('saved-list'),
       modes: $all('[data-mode]'),
       grossForm: $('gross-form'),
@@ -1233,7 +1621,36 @@
       regions: $all('[data-region]'),
       clear: $('clear'),
       storageNote: $('storage-note'),
-      toast: $('toast')
+      toast: $('toast'),
+      incTypes: $all('[data-inc-type]'),
+      incAmount: $('inc-amount'),
+      incDate: $('inc-date'),
+      incNote: $('inc-note'),
+      incAdd: $('inc-add'),
+      incWhere: $('inc-where'),
+      incMonthTitle: $('inc-month-title'),
+      incList: $('inc-list'),
+      ovSticker: $('ov-sticker'),
+      ovPrev: $('ov-prev'),
+      ovNext: $('ov-next'),
+      ovLabel: $('ov-label'),
+      ovTotal: $('ov-total'),
+      ovDetail: $('ov-detail'),
+      ovSub: $('ov-sub'),
+      ovQuip: $('ov-quip'),
+      ovMonths: $('ov-months'),
+      ovHealthBox: $('ov-health-box'),
+      ovLines: $('ov-lines'),
+      sheetUrl: $('sheet-url'),
+      sheetStatus: $('sheet-status'),
+      sheetDetail: $('sheet-detail'),
+      sheetConnect: $('sheet-connect'),
+      sheetReload: $('sheet-reload'),
+      sheetPush: $('sheet-push'),
+      sheetOff: $('sheet-off'),
+      scriptCode: $('script-code'),
+      copyCode: $('copy-code'),
+      privacyWhere: $('privacy-where')
     };
 
     var state = null;
@@ -1263,6 +1680,7 @@
     function load() {
       var s = storage();
       if (!s) {
+        storageBlocked = true;
         el.storageNote.textContent = 'Trình duyệt đang chặn lưu trữ, nên tớ sẽ không nhớ gì sau khi cậu đóng trang.';
         return null;
       }
@@ -1295,6 +1713,9 @@
             };
           });
         }
+        if (Array.isArray(saved.income)) localIncome = core.normalizeIncome(saved.income).entries;
+        var link = core.checkScriptUrl(saved.sheetUrl);
+        if (link.state === 'ok') { sheet.url = link.value; el.sheetUrl.value = link.value; }
         if (core.parseClock(saved.clockStart) !== null) el.clockStart.value = saved.clockStart;
         if (core.parseClock(saved.clockEnd) !== null) el.clockEnd.value = saved.clockEnd;
         var dep = core.parseCount(saved.dependents);
@@ -1314,7 +1735,7 @@
       for (var i = 0; i < names.length; i++) {
         if (!el.panels[names[i]].hidden) return names[i];
       }
-      return 'gross';
+      return 'overview';
     }
 
     function habitsBlank() {
@@ -1339,12 +1760,15 @@
           calcMode: calcMode,
           habits: habitsBlank() ? [] : habits,
           clockStart: el.clockStart.value,
-          clockEnd: el.clockEnd.value
+          clockEnd: el.clockEnd.value,
+          income: localIncome,
+          sheetUrl: sheet.url
         };
         var isDefault = !data.salary.trim() && !data.gross.trim() && !data.allowance.trim() &&
           !data.insuranceBase.trim() && data.dependents === '0' && data.region === '1' &&
           data.days === String(core.DEFAULTS.days) && data.hours === String(core.DEFAULTS.hours) &&
-          !data.habits.length && data.clockStart === CLOCK_DEFAULT.start && data.clockEnd === CLOCK_DEFAULT.end;
+          !data.habits.length && data.clockStart === CLOCK_DEFAULT.start && data.clockEnd === CLOCK_DEFAULT.end &&
+          !data.income.length && !data.sheetUrl;
         if (isDefault) s.removeItem(STORAGE_KEY);
         else s.setItem(STORAGE_KEY, JSON.stringify(data));
       } catch (e) { /* không lưu được thì thôi */ }
@@ -1372,7 +1796,10 @@
       var rows = [];
       if (d && typeof d === 'object') {
         var habitsCount = Array.isArray(d.habits) ? d.habits.length : 0;
+        var incomeCount = Array.isArray(d.income) ? d.income.length : 0;
         rows = [
+          ['Khoản thu', incomeCount ? incomeCount + ' khoản' : ''],
+          ['Link Google Sheet', d.sheetUrl ? 'Đã lưu (giấu đi)' : ''],
           ['Lương về tay', moneyText(d.salary)],
           [d.calcMode === 'net' ? 'Muốn cầm về' : 'Lương gross', moneyText(d.gross)],
           ['Phụ cấp miễn thuế', moneyText(d.allowance)],
@@ -1409,6 +1836,7 @@
     }
 
     function clearSaved() {
+      if (localIncome.length && !window.confirm('Xoá luôn ' + localIncome.length + ' khoản thu đang lưu trên máy này? Không lấy lại được đâu.')) return;
       try {
         var s = storage();
         if (s) { s.removeItem(STORAGE_KEY); s.removeItem(OLD_STORAGE_KEY); }
@@ -1425,10 +1853,433 @@
       habits = [{ name: '', price: '', times: '5', per: 'week' }];
       el.clockStart.value = CLOCK_DEFAULT.start;
       el.clockEnd.value = CLOCK_DEFAULT.end;
+      var hadSheet = !!sheet.url;
+      localIncome = [];
+      sheetIncome = [];
+      sheet = { url: '', status: 'off', name: '', error: '', skipped: 0 };
+      el.sheetUrl.value = '';
+      incAuto = true;
       renderHabits();
       updateAll(true);
       renderSaved();
-      toast('Đã xoá. Máy này không còn nhớ lương của cậu nữa.');
+      renderIncome();
+      toast(hadSheet ? 'Đã xoá và ngắt sheet. Sổ trên Google Sheet vẫn còn nguyên.' : 'Đã xoá. Máy này không còn nhớ lương của cậu nữa.');
+    }
+
+    /* --- Sổ thu nhập: trên máy, hoặc trên Google Sheet của người dùng nếu họ tự nối --- */
+    function todayIso() {
+      var d = new Date();
+      return d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1) + '-' + (d.getDate() < 10 ? '0' : '') + d.getDate();
+    }
+
+    function book() { return sheet.url ? sheetIncome : localIncome; }
+
+    function byDate(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; }
+
+    function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+    // Chỉ gọi tới đúng link Apps Script người dùng dán (đã qua checkScriptUrl); CSP cũng chỉ mở cho Google Apps Script.
+    function request(url, body) {
+      var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 20000);
+      var opts = { method: body ? 'POST' : 'GET', credentials: 'omit', cache: 'no-store', redirect: 'follow', referrerPolicy: 'no-referrer' };
+      if (ctrl) opts.signal = ctrl.signal;
+      // text/plain để trình duyệt không hỏi trước (preflight) — Apps Script không trả lời được câu hỏi đó
+      if (body) { opts.body = JSON.stringify(body); opts.headers = { 'Content-Type': 'text/plain;charset=utf-8' }; }
+      return fetch(url, opts)
+        .then(function (res) { return res.text(); })
+        .then(function (text) {
+          clearTimeout(timer);
+          var r = core.readSheetReply(text);
+          if (!r.ok) throw new Error(r.error);
+          return r;
+        }, function (err) {
+          clearTimeout(timer);
+          throw err;
+        });
+    }
+
+    function sheetError(err) {
+      var m = err && err.message;
+      if (err && err.name === 'AbortError') return 'Google trả lời chậm quá. Thử lại sau nhé.';
+      if (m === 'not-found') return 'Khoản này không còn trên sheet nữa (chắc đã xoá tay).';
+      if (m === 'not-json' || m === 'bad-reply') return 'Link trả về thứ lạ. Kiểm tra đã dán đúng mã và triển khai dạng Ứng dụng web chưa nhé.';
+      if (err instanceof TypeError || !m) return 'Không gọi được tới sheet. Kiểm tra link và quyền truy cập "Bất kỳ ai" nhé.';
+      return 'Sheet báo lỗi: ' + m;
+    }
+
+    function refreshSheet() {
+      if (!sheet.url) return;
+      sheet.status = 'loading';
+      sheet.error = '';
+      renderIncome();
+      var url = sheet.url;
+      request(url).then(function (r) {
+        if (url !== sheet.url) return;
+        sheet.status = 'ok';
+        sheet.name = r.name;
+        sheet.skipped = r.skipped || 0;
+        sheetIncome = r.entries || [];
+        renderIncome();
+      }).catch(function (err) {
+        if (url !== sheet.url) return;
+        sheet.status = 'error';
+        sheet.error = sheetError(err);
+        renderIncome();
+      });
+    }
+
+    function connectSheet() {
+      var c = core.checkScriptUrl(el.sheetUrl.value);
+      if (c.state !== 'ok') {
+        showSheetUrlError(c.state === 'empty' ? 'Dán link Web app vào đã nhé.' : c.message);
+        return;
+      }
+      el.sheetUrl.value = c.value;
+      showSheetUrlError('');
+      el.sheetConnect.disabled = true;
+      el.sheetStatus.textContent = 'Đang nối…';
+      request(c.value).then(function (r) {
+        sheet.url = c.value;
+        sheet.status = 'ok';
+        sheet.error = '';
+        sheet.name = r.name;
+        sheet.skipped = r.skipped || 0;
+        sheetIncome = r.entries || [];
+        save();
+        renderIncome();
+        toast('Đã nối với ' + (r.name ? '“' + r.name + '”' : 'Google Sheet') + '. Từ giờ khoản thu ghi thẳng lên đó.');
+      }).catch(function (err) {
+        showSheetUrlError(sheetError(err));
+        renderIncome();
+      }).then(function () { el.sheetConnect.disabled = false; });
+    }
+
+    function showSheetUrlError(text) {
+      var sub = $('sheet-url-sub');
+      holdHeight(sub, function () {
+        sub.textContent = text || sub.getAttribute('data-default');
+        sub.classList.toggle('warn', !!text);
+      });
+      el.sheetUrl.setAttribute('aria-invalid', text ? 'true' : 'false');
+    }
+
+    function disconnectSheet() {
+      sheet = { url: '', status: 'off', name: '', error: '', skipped: 0 };
+      sheetIncome = [];
+      el.sheetUrl.value = '';
+      showSheetUrlError('');
+      save();
+      renderIncome();
+      toast('Đã ngắt. Sổ trên Google Sheet vẫn còn nguyên.');
+    }
+
+    function pushLocal() {
+      if (!sheet.url || !localIncome.length) return;
+      var rows = localIncome.slice();
+      el.sheetPush.disabled = true;
+      request(sheet.url, { action: 'add', entries: rows.map(core.sheetRow) }).then(function () {
+        localIncome = localIncome.filter(function (e) { return rows.indexOf(e) === -1; });
+        save();
+        toast('Đã đẩy ' + rows.length + ' khoản lên sheet. Máy này không giữ chúng nữa.');
+        refreshSheet();
+      }).catch(function (err) { toast(sheetError(err)); })
+        .then(function () { el.sheetPush.disabled = false; renderIncome(); });
+    }
+
+    function suggestedSalary() {
+      var v = core.parseMoney(inputs.salary.value);
+      return v && v > 0 && v <= core.MAX_MONEY ? v : null;
+    }
+
+    // Chọn "Lương" thì tự điền lương về tay (từ tab Cầm về) cho đỡ gõ; người dùng sửa số thì thôi không điền nữa.
+    function renderIncomeForm() {
+      checkGroup(el.incTypes, 'data-inc-type', incType);
+      var sub = $('inc-amount-sub');
+      var auto = incAuto && incType === 'salary' ? suggestedSalary() : null;
+      if (incAuto) el.incAmount.value = auto ? core.formatNumber(auto) : '';
+      fitMoneyInput(el.incAmount);
+      var text = sub.getAttribute('data-default');
+      var cls = '';
+      if (incError.amount) { text = incError.amount; cls = 'warn'; }
+      else if (auto) text = salaryLinked && gState && gState.result ? '✨ Từ tab Cầm về' : '✨ Lương về tay của cậu';
+      else {
+        var v = core.parseMoney(el.incAmount.value);
+        if (v && v > 0 && !/^\d+$/.test(el.incAmount.value.trim())) { text = '= ' + core.formatVND(v); cls = 'preview'; }
+      }
+      holdHeight(sub, function () {
+        sub.textContent = text;
+        sub.className = 'row-sub' + (cls ? ' ' + cls : '');
+      });
+      el.incAmount.setAttribute('aria-invalid', incError.amount ? 'true' : 'false');
+      var dateSub = $('inc-date-sub');
+      dateSub.textContent = incError.date || '';
+      dateSub.className = 'row-sub' + (incError.date ? ' warn' : '');
+      var off = sheet.url && sheet.status !== 'ok';
+      el.incAdd.disabled = incBusy || !!off;
+      el.incAdd.textContent = incBusy ? 'Đang ghi…' : sheet.url ? 'Ghi lên Google Sheet' : 'Ghi vào sổ';
+    }
+
+    function addIncome() {
+      var c = core.checkIncome({ amount: el.incAmount.value, date: el.incDate.value, type: incType, note: el.incNote.value });
+      incError = c.errors;
+      if (!c.entry) { renderIncomeForm(); return; }
+      var entry = c.entry;
+      entry.id = newId();
+      function done() {
+        ovYear = Number(entry.date.slice(0, 4));
+        ovMonth = Number(entry.date.slice(5, 7));
+        incAuto = true;
+        el.incNote.value = '';
+        renderIncome();
+        toast('Đã ghi ' + core.formatVND(entry.amount) + (sheet.url ? ' lên Google Sheet.' : ' vào sổ.'));
+      }
+      if (!sheet.url) {
+        localIncome.push(entry);
+        localIncome.sort(byDate);
+        save();
+        done();
+        return;
+      }
+      incBusy = true;
+      renderIncomeForm();
+      request(sheet.url, { action: 'add', entries: [core.sheetRow(entry)] }).then(function () {
+        sheetIncome.push(entry);
+        sheetIncome.sort(byDate);
+        incBusy = false;
+        done();
+      }).catch(function (err) {
+        incBusy = false;
+        renderIncomeForm();
+        toast(sheetError(err));
+      });
+    }
+
+    function removeIncome(entry) {
+      var text = core.incomeLabel(entry.type) + ' ' + core.formatVND(entry.amount) + ' ngày ' + core.formatDate(entry.date);
+      if (!window.confirm('Xoá khoản ' + text + (sheet.url ? ' khỏi Google Sheet?' : '?'))) return;
+      function drop(list) { return list.filter(function (e) { return e !== entry; }); }
+      if (!sheet.url) {
+        localIncome = drop(localIncome);
+        save();
+        renderIncome();
+        toast('Đã xoá ' + text + '.');
+        return;
+      }
+      request(sheet.url, { action: 'delete', id: entry.id }).then(function () {
+        sheetIncome = drop(sheetIncome);
+        renderIncome();
+        toast('Đã xoá khỏi sheet.');
+      }).catch(function (err) {
+        toast(sheetError(err));
+        if (err && err.message === 'not-found') refreshSheet();
+      });
+    }
+
+    function renderIncome() {
+      renderIncomeForm();
+      renderOverview();
+      renderSheet();
+    }
+
+    function setFoot(node, parts) {
+      node.textContent = '';
+      parts.forEach(function (p) {
+        if (typeof p === 'string') { node.appendChild(document.createTextNode(p)); return; }
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'link-btn';
+        b.textContent = p.text;
+        if (p.go) b.setAttribute('data-go', p.go);
+        if (p.onClick) b.addEventListener('click', p.onClick);
+        node.appendChild(b);
+      });
+    }
+
+    function renderOverview() {
+      var entries = book();
+      var today = todayIso();
+      var thisYear = Number(today.slice(0, 4));
+      var minYear = thisYear;
+      var maxYear = thisYear;
+      entries.forEach(function (e) {
+        var y = Number(e.date.slice(0, 4));
+        if (y < minYear) minYear = y;
+        if (y > maxYear) maxYear = y;
+      });
+      ovYear = Math.min(maxYear, Math.max(minYear, ovYear));
+      var r = core.summarizeIncome(entries, ovYear, today);
+      if (!ovMonth) ovMonth = r.current ? Number(today.slice(5, 7)) : (r.best ? r.best.month : 12);
+      el.ovPrev.disabled = ovYear <= minYear;
+      el.ovNext.disabled = ovYear >= maxYear;
+      el.ovLabel.textContent = (ovYear === thisYear ? 'Năm nay' : 'Năm ' + ovYear) + ' cậu đã cầm về';
+
+      var loading = sheet.url && sheet.status === 'loading';
+      var failed = sheet.url && sheet.status === 'error';
+      el.ovTotal.classList.toggle('empty', !r.total);
+      if (r.total) setBig(el.ovTotal, core.moneyParts(r.total));
+      else el.ovTotal.textContent = loading ? '…' : '—';
+      el.ovDetail.hidden = !r.total || r.avgPerMonth === null;
+      if (!el.ovDetail.hidden) {
+        el.ovDetail.textContent = '≈ ' + core.formatVND(Math.round(r.avgPerMonth)) + ' mỗi tháng' +
+          (r.firstMonth > 1 ? ', tính từ tháng ' + r.firstMonth : '');
+      }
+      var sub;
+      if (loading) sub = 'Đang mở sổ trên Google Sheet…';
+      else if (failed) sub = sheet.error;
+      else if (!entries.length) sub = 'Ghi khoản thu đầu tiên bên dưới để bắt đầu nhé.';
+      else if (!r.total) sub = r.future ? 'Năm ' + ovYear + ' chưa tới mà.' : 'Năm ' + ovYear + ' chưa có khoản thu nào.';
+      else if (r.perDay !== null) sub = 'Tính ra mỗi ngày cậu kiếm ' + core.formatVND(Math.round(r.perDay)) + ', kể cả cuối tuần.';
+      else sub = '';
+      el.ovSub.textContent = sub;
+      el.ovSub.hidden = !sub;
+      var q = r.total && !loading ? core.incomeQuip(r.change, String(ovYear)) : '';
+      el.ovQuip.hidden = !q;
+      el.ovQuip.textContent = q;
+      var bigKey = ovYear + ':' + r.total;
+      if (r.total && bigKey !== lastOverview) { pop(el.ovTotal); pop(el.ovSticker); }
+      lastOverview = bigKey;
+
+      renderMonths(r, thisYear, today);
+      renderHealth(r);
+      renderMonthList(entries);
+
+      var where = el.incWhere;
+      if (!sheet.url) {
+        setFoot(where, entries.length || localIncome.length
+          ? ['Sổ đang nằm trên máy này. ', { text: 'Nối Google Sheet', go: 'data' }, ' để giữ lâu dài.']
+          : ['Chưa biết lương về tay? ', { text: 'Tính ở tab Cầm về', go: 'gross' }]);
+      } else if (failed) {
+        setFoot(where, ['Không mở được Google Sheet. ', { text: 'Thử lại', onClick: refreshSheet }]);
+      } else {
+        setFoot(where, [loading ? 'Đang mở Google Sheet…' : 'Ghi thẳng lên ' + (sheet.name ? '“' + sheet.name + '”' : 'Google Sheet') + '. Sửa tay trên sheet cũng được.']);
+      }
+    }
+
+    function renderMonths(r, thisYear, today) {
+      var max = 0;
+      r.months.forEach(function (m) { if (m.total > max) max = m.total; });
+      el.ovMonths.textContent = '';
+      r.months.forEach(function (m) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        var future = r.future || (r.current && m.month > Number(today.slice(5, 7)));
+        b.className = 'm-col' + (m.month === ovMonth ? ' on' : '') + (future ? ' future' : '');
+        b.setAttribute('aria-pressed', m.month === ovMonth ? 'true' : 'false');
+        b.setAttribute('aria-label', 'Tháng ' + m.month + ': ' + (m.total ? core.formatVND(m.total) : 'chưa có'));
+        b.title = b.getAttribute('aria-label');
+        var bar = document.createElement('span');
+        bar.className = 'm-bar';
+        var fill = document.createElement('span');
+        fill.className = 'm-fill';
+        fill.style.height = m.total ? Math.max(4, Math.round(m.total / max * 100)) + '%' : '0';
+        bar.appendChild(fill);
+        var lab = document.createElement('span');
+        lab.className = 'm-lab';
+        lab.textContent = String(m.month);
+        b.appendChild(bar);
+        b.appendChild(lab);
+        b.addEventListener('click', function () { ovMonth = m.month; renderOverview(); });
+        el.ovMonths.appendChild(b);
+      });
+    }
+
+    function renderHealth(r) {
+      el.ovHealthBox.hidden = !r.total;
+      el.ovLines.textContent = '';
+      if (!r.total) return;
+      core.INCOME_TYPES.forEach(function (t) {
+        var v = r.byType[t.key];
+        if (v) line(t.label, core.formatVND(v), '', Math.round(v / r.total * 100) + '% cả năm', el.ovLines);
+      });
+      if (r.elapsedMonths && r.byType.salary) {
+        line('Tháng có lương', r.salaryMonths + '/' + r.elapsedMonths + ' tháng', '',
+          r.salaryMonths >= r.elapsedMonths ? 'Đều đặn, ổn định' : 'Có tháng chưa ghi lương', el.ovLines);
+      }
+      if (r.best && r.monthsWithIncome > 1) {
+        line('Tháng nhiều nhất', 'Tháng ' + r.best.month, '', core.formatVND(r.best.total), el.ovLines);
+      }
+      if (r.change !== null) {
+        line(r.current ? 'So với cùng kỳ năm ngoái' : 'So với năm ' + (r.year - 1),
+          (r.change >= 0 ? '+' : '−') + core.formatPct(r.change), r.change >= 0 ? 'plus' : '',
+          'Năm ngoái: ' + core.formatVND(r.prevTotal), el.ovLines);
+      }
+    }
+
+    function renderMonthList(entries) {
+      var prefix = ovYear + '-' + (ovMonth < 10 ? '0' : '') + ovMonth;
+      var list = entries.filter(function (e) { return e.date.slice(0, 7) === prefix; }).reverse();
+      var sum = list.reduce(function (s, e) { return s + e.amount; }, 0);
+      el.incMonthTitle.textContent = 'Tháng ' + ovMonth + '/' + ovYear + (sum ? ' · ' + core.formatVND(sum) : '');
+      el.incList.textContent = '';
+      if (!list.length) {
+        var empty = document.createElement('div');
+        empty.className = 'row';
+        var dt = document.createElement('dt');
+        dt.textContent = 'Tháng này chưa ghi khoản nào.';
+        empty.appendChild(dt);
+        el.incList.appendChild(empty);
+        return;
+      }
+      list.forEach(function (e) {
+        var row = document.createElement('div');
+        row.className = 'row income-row';
+        var dt = document.createElement('dt');
+        dt.textContent = core.incomeLabel(e.type);
+        var small = document.createElement('small');
+        small.textContent = core.formatDate(e.date).slice(0, 5) + (e.note ? ' · ' + e.note : '');
+        dt.appendChild(small);
+        var dd = document.createElement('dd');
+        dd.textContent = core.formatVND(e.amount);
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'item-remove';
+        x.textContent = '✕';
+        x.setAttribute('aria-label', 'Xoá khoản ' + core.incomeLabel(e.type) + ' ' + core.formatVND(e.amount));
+        x.addEventListener('click', function () { removeIncome(e); });
+        row.appendChild(dt);
+        row.appendChild(dd);
+        row.appendChild(x);
+        el.incList.appendChild(row);
+      });
+    }
+
+    function renderSheet() {
+      var on = !!sheet.url;
+      var status = { off: 'Chưa nối', loading: 'Đang tải…', ok: 'Đã nối', error: 'Lỗi' }[on ? sheet.status : 'off'];
+      el.sheetStatus.textContent = status;
+      el.sheetStatus.classList.toggle('bad', on && sheet.status === 'error');
+      var detail;
+      if (!on) detail = localIncome.length ? localIncome.length + ' khoản thu đang nằm trên máy này' : 'Sổ thu đang nằm trên máy này';
+      else if (sheet.status === 'error') detail = sheet.error;
+      else if (sheet.status === 'ok') {
+        detail = (sheet.name ? '“' + sheet.name + '” · ' : '') + sheetIncome.length + ' khoản thu' +
+          (sheet.skipped ? ' · bỏ qua ' + sheet.skipped + ' dòng không đọc được' : '');
+      } else detail = '';
+      el.sheetDetail.textContent = detail;
+      el.sheetConnect.textContent = on ? 'Nối link khác' : 'Nối sheet';
+      el.sheetConnect.hidden = on && el.sheetUrl.value.trim() === sheet.url;
+      el.sheetReload.hidden = !on;
+      el.sheetOff.hidden = !on;
+      el.sheetPush.hidden = !on || sheet.status !== 'ok' || !localIncome.length;
+      el.sheetPush.textContent = 'Đẩy ' + localIncome.length + ' khoản trên máy lên sheet';
+      el.privacyWhere.textContent = on ? 'Máy này + sheet riêng' : 'Chỉ nằm trên máy này';
+      if (!storageBlocked) {
+        el.storageNote.textContent = on
+          ? 'Khoản thu đi thẳng tới Google Sheet của cậu qua link Apps Script, không qua máy chủ nào khác. Lương và thiết lập vẫn chỉ nằm trên máy này. Không theo dõi, không cookie.'
+          : 'Không máy chủ, không theo dõi, không cookie. Trang không gửi gì ra ngoài, kể cả lương.';
+      }
+    }
+
+    function copyCode() {
+      var done = function () { toast('Đã chép mã. Dán vào Apps Script nhé.'); };
+      var fallback = function () {
+        el.scriptCode.focus();
+        el.scriptCode.select();
+        try { document.execCommand('copy'); done(); } catch (e) { toast('Không chép được, cậu bôi đen rồi chép tay giúp tớ nhé.'); }
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(core.APPS_SCRIPT).then(done, fallback);
+      else fallback();
     }
 
     /* --- Tab --- */
@@ -1440,14 +2291,32 @@
         if (on && focus) tab.focus();
       });
       Object.keys(el.panels).forEach(function (key) { el.panels[key].hidden = key !== name; });
+      revealTab(name);
       // Hash khác id của mọi ô nhập, kẻo trình duyệt tự nhảy tới và focus vào ô đó
       // Tab đầu không cần đuôi: URL sạch. Tab khác dùng đuôi đọc được, để tải lại hay gửi link vẫn đúng tab.
       var url = HASHES[name] ? '#' + HASHES[name] : location.pathname + location.search;
       try { history.replaceState(null, '', url); } catch (e) { /* file:// */ }
       tick();
     }
+    // Màn hẹp: thanh tab vuốt ngang được. Kéo tab đang mở vào tầm nhìn và làm mờ mép phải nếu còn tab bị khuất.
+    var tabBar = document.querySelector('.tabs');
+    function tabOverflow() {
+      tabBar.classList.toggle('more', tabBar.scrollLeft + tabBar.clientWidth < tabBar.scrollWidth - 2);
+    }
+    function revealTab(name) {
+      var tab = $('tab-' + name);
+      if (!tab || tabBar.scrollWidth <= tabBar.clientWidth) { tabOverflow(); return; }
+      var left = tab.offsetLeft - tabBar.offsetLeft;
+      if (left < tabBar.scrollLeft) tabBar.scrollLeft = left - 8;
+      else if (left + tab.offsetWidth > tabBar.scrollLeft + tabBar.clientWidth) {
+        tabBar.scrollLeft = left + tab.offsetWidth - tabBar.clientWidth + 8;
+      }
+      tabOverflow();
+    }
+    tabBar.addEventListener('scroll', tabOverflow, { passive: true });
+    window.addEventListener('resize', tabOverflow);
     // Hash không được trùng id của ô nhập nào, kẻo trình duyệt tự nhảy tới và focus vào ô đó
-    var HASHES = { gross: '', time: 'quy-ra-gio', habit: 'thoi-quen', clock: 'dong-ho', data: 'du-lieu' };
+    var HASHES = { overview: '', gross: 'cam-ve', time: 'quy-ra-gio', habit: 'thoi-quen', clock: 'dong-ho', data: 'du-lieu' };
     // Link cũ vẫn mở đúng tab
     var OLD_HASHES = { net: 'gross', gross: 'gross', time: 'time', habit: 'habit', clock: 'clock', data: 'data' };
 
@@ -1706,7 +2575,7 @@
     }
 
     /* --- Tab "Lương thực nhận" --- */
-    function line(label, value, cls, note) {
+    function line(label, value, cls, note, target) {
       var row = document.createElement('div');
       row.className = 'row' + (cls ? ' ' + cls : '');
       var dt = document.createElement('dt');
@@ -1720,7 +2589,7 @@
       dd.textContent = value;
       row.appendChild(dt);
       row.appendChild(dd);
-      el.gLines.appendChild(row);
+      (target || el.gLines).appendChild(row);
     }
 
     function pct(part, whole) {
@@ -1882,6 +2751,7 @@
       renderGross(showErrors);
       renderHabitResult(showErrors);
       renderClockStatic();
+      renderIncomeForm();
       // Báo lỗi chậm một nhịp để không nhấp nháy khi đang gõ dở ("15 tri…").
       clearTimeout(msgTimer);
       if (!showErrors) {
@@ -2749,6 +3619,29 @@
       });
     });
     el.share.addEventListener('click', share);
+
+    radioGroup(el.incTypes, function (btn) {
+      incType = btn.getAttribute('data-inc-type');
+      incAuto = true;
+      incError = {};
+      renderIncomeForm();
+    });
+    el.incAmount.addEventListener('input', function () {
+      incAuto = false;
+      incError.amount = '';
+      renderIncomeForm();
+    });
+    el.incDate.addEventListener('change', function () { incError.date = ''; renderIncomeForm(); });
+    $('income-form').addEventListener('submit', function (e) { e.preventDefault(); addIncome(); });
+    el.ovPrev.addEventListener('click', function () { ovYear--; ovMonth = 0; renderOverview(); });
+    el.ovNext.addEventListener('click', function () { ovYear++; ovMonth = 0; renderOverview(); });
+    $('sheet-form').addEventListener('submit', function (e) { e.preventDefault(); connectSheet(); });
+    el.sheetUrl.addEventListener('input', function () { showSheetUrlError(''); renderSheet(); });
+    el.sheetReload.addEventListener('click', refreshSheet);
+    el.sheetOff.addEventListener('click', disconnectSheet);
+    el.sheetPush.addEventListener('click', pushLocal);
+    el.copyCode.addEventListener('click', copyCode);
+    el.scriptCode.value = core.APPS_SCRIPT;
     el.clear.addEventListener('click', clearSaved);
 
     function tabFromHash() {
@@ -2766,9 +3659,11 @@
     var savedTab = load();
     renderHabits();
     var hashTab = tabFromHash();
-    // Lần đầu: bắt đầu từ tính lương thực nhận. Đã có lương thực nhận thì vào thẳng quy giờ làm.
-    showTab(hashTab || savedTab || (inputs.salary.value.trim() ? 'time' : 'gross'));
+    showTab(hashTab || savedTab || 'overview');
+    el.incDate.value = todayIso();
     updateAll(true);
+    renderIncome();
+    refreshSheet();
     $all('.row-input.money input').forEach(fitMoneyInput);
     renderSaved();
   }

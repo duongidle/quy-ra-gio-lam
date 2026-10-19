@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <!-- Không cho trang gọi mạng: lương không thể rời khỏi trình duyệt -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
+  <!-- Trang chỉ được gọi tới Apps Script của Google (sổ thu trên sheet của chính người dùng, khi họ tự nối). Ngoài ra không gọi mạng. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src https://script.google.com https://script.googleusercontent.com; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <title>Quy ra giờ làm</title>
-  <meta name="description" content="Tính lương thực nhận từ lương gross, và quy giá món đồ ra thời gian làm việc. Mọi thứ chỉ nằm trên máy cậu.">
+  <meta name="description" content="Tính lương thực nhận từ lương gross, và quy giá món đồ ra thời gian làm việc. Ghi sổ thu nhập, xem bức tranh cả năm. Không máy chủ, không theo dõi.">
   <meta name="theme-color" content="#F7F3EE" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#171310" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%23FDE6D8' stroke='%23D9531E' stroke-width='6'/%3E%3Cpath d='M32 18v14l10 6' fill='none' stroke='%23D9531E' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
   <!-- Đổi ?v= mỗi lần sửa CSS/JS để trình duyệt không dùng bản cũ trong cache -->
-  <link rel="stylesheet" href="style.css?v=23">
-  <script src="app.js?v=22" defer></script>
+  <link rel="stylesheet" href="style.css?v=24">
+  <script src="app.js?v=23" defer></script>
 </head>
 <body>
   <main class="wrap">
@@ -31,7 +31,8 @@
         </div>
       </div>
       <div class="tabs" role="tablist" aria-label="Công cụ">
-        <button type="button" role="tab" id="tab-gross" data-tab="gross" aria-controls="panel-gross" aria-selected="true">Cầm về</button>
+        <button type="button" role="tab" id="tab-overview" data-tab="overview" aria-controls="panel-overview" aria-selected="true">Tổng quan</button>
+        <button type="button" role="tab" id="tab-gross" data-tab="gross" aria-controls="panel-gross" aria-selected="false" tabindex="-1">Cầm về</button>
         <button type="button" role="tab" id="tab-time" data-tab="time" aria-controls="panel-time" aria-selected="false" tabindex="-1">Quy ra giờ</button>
         <button type="button" role="tab" id="tab-habit" data-tab="habit" aria-controls="panel-habit" aria-selected="false" tabindex="-1">Thói quen</button>
         <button type="button" role="tab" id="tab-clock" data-tab="clock" aria-controls="panel-clock" aria-selected="false" tabindex="-1">Đồng hồ</button>
@@ -39,8 +40,74 @@
       </div>
     </header>
 
+    <!-- ============ Tổng quan tài chính ============ -->
+    <section id="panel-overview" class="panel" role="tabpanel" aria-labelledby="tab-overview">
+      <div class="side side-input">
+        <form class="group o-2" id="income-form" novalidate autocomplete="off">
+          <h2 class="group-title">Ghi khoản thu</h2>
+          <div class="list">
+            <div class="row stack">
+              <span class="row-main"><span class="row-label" id="inc-type-label">Tiền gì đây?</span></span>
+              <span class="seg seg-text" role="radiogroup" aria-labelledby="inc-type-label">
+                <button type="button" role="radio" data-inc-type="salary" aria-checked="true">Lương</button>
+                <button type="button" role="radio" data-inc-type="bonus" aria-checked="false" tabindex="-1">Thưởng</button>
+                <button type="button" role="radio" data-inc-type="extra" aria-checked="false" tabindex="-1">Làm thêm</button>
+                <button type="button" role="radio" data-inc-type="other" aria-checked="false" tabindex="-1">Khác</button>
+              </span>
+            </div>
+            <label class="row" for="inc-amount">
+              <span class="row-main"><span class="row-label">Số tiền</span>
+                <span class="row-sub" id="inc-amount-sub" data-default="Số thật về tài khoản"></span></span>
+              <span class="row-input money"><input id="inc-amount" type="text" inputmode="text" placeholder="15tr"
+                spellcheck="false" autocapitalize="off" enterkeyhint="next" aria-describedby="inc-amount-sub"></span>
+            </label>
+            <label class="row" for="inc-date">
+              <span class="row-main"><span class="row-label">Ngày nhận</span>
+                <span class="row-sub" id="inc-date-sub" data-default=""></span></span>
+              <span class="row-input date"><input id="inc-date" type="date" aria-describedby="inc-date-sub"></span>
+            </label>
+            <label class="row" for="inc-note">
+              <span class="row-main"><span class="row-label">Ghi chú</span></span>
+              <span class="row-input note"><input id="inc-note" type="text" maxlength="200" placeholder="Không bắt buộc"
+                enterkeyhint="done"></span>
+            </label>
+          </div>
+          <button type="submit" class="primary-btn" id="inc-add">Ghi vào sổ</button>
+          <p class="group-foot" id="inc-where"></p>
+        </form>
+        <section class="group o-4" id="ov-health-box" hidden>
+          <h2 class="group-title">Nhìn kỹ hơn</h2>
+          <dl class="list" id="ov-lines"></dl>
+        </section>
+      </div>
+
+      <div class="side side-result">
+        <h2 class="group-title desk-only o-1">Bức tranh cả năm</h2>
+        <div class="hero o-1" id="ov-hero" aria-live="polite">
+          <span class="sticker" id="ov-sticker" aria-hidden="true">📒</span>
+          <div class="year-nav">
+            <button type="button" id="ov-prev" aria-label="Năm trước">‹</button>
+            <p class="hero-label" id="ov-label">Năm nay cậu đã cầm về</p>
+            <button type="button" id="ov-next" aria-label="Năm sau">›</button>
+          </div>
+          <p class="hero-value empty" id="ov-total">—</p>
+          <p class="hero-detail" id="ov-detail" hidden></p>
+          <p class="hero-sub" id="ov-sub">Ghi khoản thu đầu tiên bên dưới để bắt đầu nhé.</p>
+          <p class="hero-quip" id="ov-quip" hidden></p>
+        </div>
+        <section class="group o-3" id="ov-chart-box">
+          <h2 class="group-title">Từng tháng</h2>
+          <div class="list months-chart" id="ov-months" role="group" aria-label="Thu nhập từng tháng"></div>
+        </section>
+        <section class="group o-3" id="inc-month">
+          <h2 class="group-title" id="inc-month-title">Tháng này</h2>
+          <dl class="list" id="inc-list"></dl>
+        </section>
+      </div>
+    </section>
+
     <!-- ============ Lương thực nhận (gross → net) ============ -->
-    <section id="panel-gross" class="panel" role="tabpanel" aria-labelledby="tab-gross">
+    <section id="panel-gross" class="panel" role="tabpanel" aria-labelledby="tab-gross" hidden>
       <div class="mode-seg o-0" role="radiogroup" aria-label="Tính kiểu nào">
         <button type="button" role="radio" data-mode="gross" aria-checked="true">Gross → Net</button>
         <button type="button" role="radio" data-mode="net" aria-checked="false" tabindex="-1">Net → Gross</button>
@@ -329,7 +396,44 @@
     <!-- ============ Dữ liệu ============ -->
     <section id="panel-data" class="panel" role="tabpanel" aria-labelledby="tab-data" hidden>
       <div class="side side-input">
-        <div class="group o-2">
+        <form class="group o-2" id="sheet-form" novalidate autocomplete="off">
+          <h2 class="group-title">Sổ thu trên Google Sheet</h2>
+          <div class="list">
+            <label class="row stack" for="sheet-url">
+              <span class="row-main"><span class="row-label">Link Apps Script</span>
+                <span class="row-sub" id="sheet-url-sub" data-default="Link Web app, đuôi /exec. Giữ kín như mật khẩu."></span></span>
+              <span class="row-input url"><input id="sheet-url" type="url" inputmode="url" spellcheck="false" autocapitalize="off"
+                placeholder="https://script.google.com/macros/s/…/exec" enterkeyhint="go" aria-describedby="sheet-url-sub"></span>
+            </label>
+            <div class="row">
+              <span class="row-main"><span class="row-label">Tình trạng</span>
+                <span class="row-sub" id="sheet-detail"></span></span>
+              <span class="row-value status" id="sheet-status">Chưa nối</span>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button type="submit" class="pill-btn main" id="sheet-connect">Nối sheet</button>
+            <button type="button" class="pill-btn" id="sheet-reload" hidden>Tải lại</button>
+            <button type="button" class="pill-btn" id="sheet-push" hidden></button>
+            <button type="button" class="pill-btn" id="sheet-off" hidden>Ngắt</button>
+          </div>
+          <details class="howto">
+            <summary>Lấy link ở đâu? (khoảng 2 phút)</summary>
+            <ol>
+              <li>Tạo một Google Sheet mới (hoặc mở sheet cậu muốn dùng).</li>
+              <li>Menu <b>Tiện ích mở rộng → Apps Script</b>, xoá hết mã có sẵn rồi dán đoạn mã bên dưới vào, bấm lưu.</li>
+              <li>Bấm <b>Triển khai → Tùy chọn triển khai mới</b>, loại <b>Ứng dụng web</b>.
+                Thực thi với tư cách <b>Tôi</b>, ai có quyền truy cập: <b>Bất kỳ ai</b>.</li>
+              <li>Cho phép quyền truy cập (Google sẽ cảnh báo vì mã chưa xác minh: chọn Nâng cao → Đi tới dự án).</li>
+              <li>Chép <b>URL ứng dụng web</b> (đuôi /exec), dán vào ô bên trên rồi bấm Nối sheet.</li>
+            </ol>
+            <textarea id="script-code" readonly rows="8" wrap="off" spellcheck="false" aria-label="Mã Apps Script"></textarea>
+            <button type="button" class="pill-btn" id="copy-code">Chép mã</button>
+            <p class="howto-note">Mã chỉ đọc và ghi trang tính "Thu nhập" trong sheet đó. Sửa mã thì phải triển khai lại
+              (Quản lý triển khai → Chỉnh sửa → Phiên bản mới) thì link mới chạy bản mới.</p>
+          </details>
+        </form>
+        <div class="group o-3">
           <h2 class="group-title">Đang lưu trên máy này</h2>
           <dl class="list" id="saved-list"></dl>
           <p class="group-foot">Giỏ hàng và hai offer không được lưu, đóng trang là mất.</p>
@@ -341,7 +445,7 @@
         <div class="hero o-1">
           <span class="sticker" aria-hidden="true">🔒</span>
           <p class="hero-label">Dữ liệu của cậu</p>
-          <p class="hero-value hero-text">Chỉ nằm trên máy này</p>
+          <p class="hero-value hero-text" id="privacy-where">Chỉ nằm trên máy này</p>
           <p class="hero-sub" id="storage-note">Không máy chủ, không theo dõi, không cookie. Trang không gửi gì ra ngoài, kể cả lương.</p>
           <button type="button" id="clear" class="danger-btn">Xoá dữ liệu đã lưu</button>
         </div>

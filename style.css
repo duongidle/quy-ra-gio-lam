@@ -93,7 +93,7 @@ h1 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(5, auto);
+  grid-template-columns: repeat(6, auto);
   gap: 2px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -116,6 +116,8 @@ h1 {
   transition: background 0.2s, color 0.2s;
 }
 .tabs::-webkit-scrollbar { display: none; }
+/* Màn hẹp không đủ chỗ cho 6 tab: vuốt ngang, mép phải mờ dần để biết còn tab */
+.tabs.more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 @media (max-width: 400px) {
   .tabs { gap: 0; padding: 3px; }
   .tabs [role="tab"] { padding: 9px 5px; font-size: 12.5px; }
@@ -766,6 +768,126 @@ dl.list dd.none { color: var(--muted); font-weight: 500; }
 .danger-btn:disabled { opacity: 0.4; cursor: default; }
 .danger-btn:focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
 
+/* Tổng quan: sổ thu nhập */
+.year-nav { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.year-nav button {
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.year-nav button:disabled { opacity: 0; pointer-events: none; }
+.year-nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.months-chart {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 3px;
+  padding: 14px 10px 8px;
+}
+.m-col {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.m-bar {
+  position: relative;
+  height: 92px;
+  border-radius: 7px;
+  background: var(--soft);
+  overflow: hidden;
+}
+.m-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 7px 7px 0 0;
+  background: var(--accent-line);
+  transition: height 0.4s cubic-bezier(0.3, 1.3, 0.6, 1);
+}
+.m-lab { font-size: 11.5px; font-weight: 650; color: var(--muted); text-align: center; }
+.m-col.future .m-bar { background: transparent; border: 1px dashed var(--hairline); }
+.m-col.on .m-fill { background: var(--accent); }
+.m-col.on .m-bar { outline: 2px solid var(--accent); outline-offset: 1px; }
+.m-col.on .m-lab { color: var(--accent); }
+.m-col:focus-visible { outline: none; }
+.m-col:focus-visible .m-lab { text-decoration: underline; }
+
+.row-input.date { width: auto; }
+.row-input.date input { width: 150px; font-size: 18px; }
+.row-input.date input::-webkit-calendar-picker-indicator { display: block !important; opacity: 0.5; cursor: pointer; }
+.row-input.note { width: 55%; max-width: 230px; }
+.row-input.note input { font-size: 16px; font-weight: 600; }
+.row.stack .row-input.url { width: 100%; max-width: none; }
+.row-input.url input { font-size: 16px; font-weight: 600; text-align: left; letter-spacing: 0; }
+.row-value.status { font-size: 15.5px; white-space: nowrap; }
+.row-value.status.bad { color: var(--warn); }
+.income-row { gap: 8px; }
+.income-row dt { flex: 1; min-width: 0; color: var(--ink); font-weight: 650; }
+.income-row dt small { color: var(--muted); font-weight: 500; overflow-wrap: anywhere; }
+.income-row .item-remove { margin-left: -2px; }
+.primary-btn:disabled { opacity: 0.55; cursor: default; }
+#income-form .row-input.money { width: 52%; max-width: 200px; }
+@media (max-width: 360px) {
+  #income-form .seg-text button { padding: 0 3px; font-size: 12.5px; }
+  #income-form .row-input input { font-size: 17px; }
+}
+
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 2px 0; }
+.pill-btn {
+  appearance: none;
+  min-height: 40px;
+  padding: 0 16px;
+  border: var(--edge);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pill-btn.main { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.pill-btn:disabled { opacity: 0.5; cursor: default; }
+.pill-btn:active { transform: scale(0.97); }
+.pill-btn:focus-visible, .howto summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.howto { margin: 14px 2px 0; font-size: 14px; }
+.howto summary { cursor: pointer; color: var(--accent); font-weight: 650; padding: 4px 0; }
+.howto ol { margin: 8px 0 12px; padding-left: 22px; line-height: 1.55; }
+.howto li + li { margin-top: 4px; }
+.howto textarea {
+  display: block;
+  width: 100%;
+  height: 150px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: var(--edge);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+}
+.howto-note { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+
 /* --- Bố cục: điện thoại một cột (kết quả lên đầu), màn rộng hai cột nhập | kết quả --- */
 .panel { display: flex; flex-direction: column; }
 .side { display: contents; }
@@ -786,7 +908,7 @@ dl.list dd.none { color: var(--muted); font-weight: 500; }
     gap: 24px;
   }
   .brand { margin: 0; }
-  .tabs { width: 400px; flex: none; }
+  .tabs { width: 480px; flex: none; }
 
   .panel {
     display: grid;
