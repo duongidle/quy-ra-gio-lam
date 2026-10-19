@@ -268,5 +268,154 @@ test('lương cực cao, giá cực nhỏ -> giây', () => {
   noBadNumbers(out);
 });
 
+/* ---------- Gross -> thực nhận ---------- */
+test('thuế lũy tiến 5 bậc', () => {
+  assert.equal(Q.progressiveTax(0), 0);
+  assert.equal(Q.progressiveTax(10000000), 500000);
+  assert.equal(Q.progressiveTax(11350000), 635000);
+  assert.equal(Q.progressiveTax(30000000), 2500000);
+  assert.equal(Q.progressiveTax(60000000), 8500000);
+  assert.equal(Q.progressiveTax(100000000), 20500000);
+  assert.equal(Q.progressiveTax(120000000), 27500000);
+});
+
+test('gross 30tr, không người phụ thuộc', () => {
+  const g = Q.grossToNet({ gross: 30000000 });
+  assert.equal(g.bhxh, 2400000);
+  assert.equal(g.bhyt, 450000);
+  assert.equal(g.bhtn, 300000);
+  assert.equal(g.insurance, 3150000);
+  assert.equal(g.taxable, 11350000); // 30 - 3,15 - 15,5
+  assert.equal(g.tax, 635000);
+  assert.equal(g.net, 26215000);
+});
+
+test('gross thấp hơn mức giảm trừ -> không thuế', () => {
+  const g = Q.grossToNet({ gross: 15000000 });
+  assert.equal(g.tax, 0);
+  assert.equal(g.net, 15000000 - 1575000);
+});
+
+test('người phụ thuộc làm giảm thuế', () => {
+  const g = Q.grossToNet({ gross: 30000000, dependents: 1 });
+  assert.equal(g.taxable, 5150000);
+  assert.equal(g.tax, 257500);
+});
+
+test('lương đóng BH thấp hơn gross', () => {
+  const g = Q.grossToNet({ gross: 30000000, insuranceBase: 10000000 });
+  assert.equal(g.insurance, 1050000);
+  assert.equal(g.taxable, 13450000);
+});
+
+test('trần bảo hiểm: BHXH/BHYT 50,6tr, BHTN theo vùng', () => {
+  const g = Q.grossToNet({ gross: 100000000 });
+  assert.equal(g.bhxh, 4048000);
+  assert.equal(g.bhyt, 759000);
+  assert.equal(g.bhtn, 1000000); // dưới trần vùng I 106,2tr
+  const g4 = Q.grossToNet({ gross: 100000000, region: 4 });
+  assert.equal(g4.bhtn, 740000); // trần vùng IV 74tr
+  assert.equal(g.net, 100000000 - g.insurance - g.tax);
+});
+
+const evg = (patch) => Q.evaluateGross(Object.assign({ gross: '30tr', dependents: 0, insuranceBase: '', region: '1' }, patch));
+
+test('evaluateGross: 30tr -> 26.215.000đ', () => {
+  const out = evg({});
+  assert.equal(out.result.net, 26215000);
+  assert.equal(out.result.socialCapped, false);
+  noBadNumbers(out);
+});
+
+test('evaluateGross: gross trống / sai -> gợi ý, không kết quả', () => {
+  for (const gross of ['', 'abc', '0', '-5tr']) {
+    const out = evg({ gross });
+    assert.equal(out.result, null, gross);
+    assert.ok(out.hint, gross);
+    noBadNumbers(out);
+  }
+});
+
+test('evaluateGross: cờ chạm trần bảo hiểm', () => {
+  const r = evg({ gross: '120tr' }).result;
+  assert.equal(r.socialCapped, true);
+  assert.equal(r.unemploymentCapped, true);
+});
+
+[[-1, 'invalid'], ['1,5', 'invalid'], ['hai', 'invalid'], [21, 'invalid'], [3, 'ok']].forEach(([dependents, st]) => {
+  test(`người phụ thuộc ${JSON.stringify(dependents)} -> ${st}`, () => {
+    const out = evg({ dependents });
+    assert.equal(out.fields.dependents.state, st);
+    assert.equal(!!out.result, st === 'ok');
+    noBadNumbers(out);
+  });
+});
+
+test('lương đóng BH lớn hơn gross hoặc gõ linh tinh -> báo', () => {
+  assert.equal(evg({ insuranceBase: '40tr' }).fields.insuranceBase.state, 'range');
+  assert.equal(evg({ insuranceBase: 'abc' }).fields.insuranceBase.state, 'invalid');
+  assert.equal(evg({ insuranceBase: '' }).fields.insuranceBase.state, 'ok');
+  assert.equal(evg({ insuranceBase: '10tr' }).result.insurance, 1050000);
+  noBadNumbers(evg({ insuranceBase: 'abc' }));
+});
+
+test('phụ cấp miễn thuế: cộng vào thực nhận, không đóng BH, không tính thuế', () => {
+  const g = Q.grossToNet({ gross: 30000000, allowance: 730000 });
+  assert.equal(g.insurance, 3150000);
+  assert.equal(g.tax, 635000);
+  assert.equal(g.net, 26215000 + 730000);
+  const out = evg({ allowance: '730k' });
+  assert.equal(out.result.net, 26945000);
+  assert.equal(out.result.allowance, 730000);
+});
+
+test('phụ cấp trống = 0, gõ sai -> báo, không kết quả', () => {
+  assert.equal(evg({ allowance: '' }).result.allowance, 0);
+  const bad = evg({ allowance: 'abc' });
+  assert.equal(bad.fields.allowance.state, 'invalid');
+  assert.equal(bad.result, null);
+  assert.ok(bad.hint);
+  assert.equal(evg({ allowance: '-5k' }).fields.allowance.state, 'invalid');
+  noBadNumbers(bad);
+});
+
+test('sticker theo đơn vị thời gian', () => {
+  assert.equal(Q.stickerFor('minutes'), '☕');
+  assert.equal(Q.stickerFor('years'), '🏔️');
+  assert.equal(Q.stickerFor('lạ'), '🛍️');
+});
+
+test('câu bình luận về thuế: đúng mức, ổn định theo hạt giống, đã thay {tax}', () => {
+  const inPool = (text, k, tax) => Q.TAX_QUIPS[k].lines.map((l) => l.replace('{tax}', tax)).includes(text);
+  const cases = [[8000000, 0], [15000000, 1], [30000000, 2], [60000000, 3], [100000000, 4], [300000000, 5]];
+  for (const [gross, k] of cases) {
+    const g = Q.grossToNet({ gross });
+    for (const seed of ['a', 'b', 'c', 'xyz']) {
+      const text = Q.netQuip(g, seed);
+      assert.ok(inPool(text, k, Q.formatVND(g.tax)), gross + ': ' + text);
+      assert.ok(!text.includes('{tax}'), text);
+      assert.equal(text, Q.netQuip(g, seed));
+    }
+  }
+  assert.match(Q.netQuip(Q.grossToNet({ gross: 30000000 }), 'seed'), /635\.000đ/);
+});
+
+test('câu bình luận theo thời gian: đủ mọi mức, ổn định theo hạt giống', () => {
+  const day = 8 * 60;
+  const cases = [[0.5, 0], [3, 1], [10, 2], [20, 3], [45, 4], [180, 5], [400, 6], [day * 1.5, 7], [day * 3, 8],
+    [day * 10, 9], [day * 22 * 2, 10], [day * 22 * 6, 11], [day * 22 * 12 * 3, 12], [day * 22 * 12 * 10, 13], [day * 22 * 12 * 50, 14]];
+  for (const [minutes, k] of cases) {
+    for (const seed of ['Ly cà phê|45000', 'x', '']) {
+      const text = Q.quip(minutes, 8, 22, seed);
+      assert.ok(Q.TIME_QUIPS[k].lines.includes(text), minutes + ' phút -> ' + text);
+      assert.equal(text, Q.quip(minutes, 8, 22, seed));
+    }
+  }
+  // Mỗi mức đều có ít nhất 3 câu và không câu nào trùng
+  const all = Q.TIME_QUIPS.flatMap((b) => b.lines).concat(Q.TAX_QUIPS.flatMap((b) => b.lines));
+  assert.equal(new Set(all).size, all.length);
+  Q.TIME_QUIPS.concat(Q.TAX_QUIPS).forEach((b) => assert.ok(b.lines.length >= 3));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -7,126 +7,195 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <title>Quy ra giờ làm</title>
-  <meta name="description" content="Quy giá món đồ cậu muốn mua ra thời gian làm việc cần bỏ ra. Mọi thứ chỉ nằm trên máy cậu.">
-  <meta name="theme-color" content="#FBF4EA" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1A1511" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Tính lương thực nhận từ lương gross, và quy giá món đồ ra thời gian làm việc. Mọi thứ chỉ nằm trên máy cậu.">
+  <meta name="theme-color" content="#F7F3EE" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#171310" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%23FDE6D8' stroke='%23D9531E' stroke-width='6'/%3E%3Cpath d='M32 18v14l10 6' fill='none' stroke='%23D9531E' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css">
-  <script src="app.js" defer></script>
+  <!-- Đổi ?v= mỗi lần sửa CSS/JS để trình duyệt không dùng bản cũ trong cache -->
+  <link rel="stylesheet" href="style.css?v=10">
+  <script src="app.js?v=9" defer></script>
 </head>
 <body>
   <main class="wrap">
     <header class="top">
-      <svg class="clock" viewBox="0 0 48 48" aria-hidden="true">
-        <circle class="face" cx="24" cy="24" r="19" stroke-width="4"/>
-        <line class="hand hand-long" x1="24" y1="24" x2="24" y2="11" stroke-width="4" stroke-linecap="round"/>
-        <line class="hand hand-short" x1="24" y1="24" x2="31" y2="28" stroke-width="4" stroke-linecap="round"/>
-        <circle class="pin" cx="24" cy="24" r="2.5"/>
-      </svg>
-      <div>
-        <h1>Quy ra giờ làm</h1>
-        <p class="tagline">Món này tốn của cậu bao nhiêu thời gian làm việc?</p>
+      <div class="brand">
+        <svg class="clock" viewBox="0 0 48 48" aria-hidden="true">
+          <circle class="face" cx="24" cy="24" r="19" stroke-width="4"/>
+          <line class="hand-long" x1="24" y1="24" x2="24" y2="11" stroke-width="4" stroke-linecap="round"/>
+          <line class="hand-short" x1="24" y1="24" x2="31" y2="28" stroke-width="4" stroke-linecap="round"/>
+          <circle class="pin" cx="24" cy="24" r="2.5"/>
+        </svg>
+        <div>
+          <h1>Quy ra giờ làm</h1>
+          <p class="tagline">Lương về tay bao nhiêu, món này tốn mấy giờ làm?</p>
+        </div>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Công cụ">
+        <button type="button" role="tab" id="tab-gross" data-tab="gross" aria-controls="panel-gross" aria-selected="true">Lương thực nhận</button>
+        <button type="button" role="tab" id="tab-time" data-tab="time" aria-controls="panel-time" aria-selected="false" tabindex="-1">Quy ra giờ làm</button>
       </div>
     </header>
 
-    <form id="form" novalidate autocomplete="off">
-      <section class="card" aria-labelledby="income-title">
-        <h2 id="income-title"><span aria-hidden="true">💼</span> Thu nhập của cậu</h2>
-
-        <div class="field">
-          <div class="label-row">
-            <label for="salary">Lương thực nhận mỗi tháng</label>
-            <span class="preview" id="salary-preview" hidden></span>
+    <!-- ============ Lương thực nhận (gross → net) ============ -->
+    <section id="panel-gross" class="panel" role="tabpanel" aria-labelledby="tab-gross">
+      <div class="side side-input">
+        <form class="group o-2" novalidate autocomplete="off">
+          <h2 class="group-title">Trên hợp đồng ghi</h2>
+          <div class="list">
+            <label class="row" for="gross">
+              <span class="row-main">
+                <span class="row-label">Lương gross</span>
+                <span class="row-sub" id="gross-sub" data-default="Trước thuế và bảo hiểm"></span>
+              </span>
+              <span class="row-input money"><input id="gross" type="text" inputmode="text" placeholder="30tr"
+                spellcheck="false" autocapitalize="off" enterkeyhint="next" aria-describedby="gross-sub"></span>
+            </label>
+            <label class="row" for="allowance">
+              <span class="row-main">
+                <span class="row-label">Phụ cấp miễn thuế</span>
+                <span class="row-sub" id="allowance-sub" data-default="Ăn trưa, xăng xe… ngoài gross"></span>
+              </span>
+              <span class="row-input money"><input id="allowance" type="text" inputmode="text" placeholder="0"
+                spellcheck="false" autocapitalize="off" enterkeyhint="next" aria-describedby="allowance-sub"></span>
+            </label>
+            <div class="row">
+              <span class="row-main"><span class="row-label" id="dep-label">Người phụ thuộc</span><span class="row-sub">Mỗi người bớt 6,2tr khi tính thuế</span></span>
+              <span class="stepper" role="group" aria-labelledby="dep-label">
+                <button type="button" id="dep-minus" aria-label="Bớt một người">−</button>
+                <output id="dep-value" aria-live="polite">0</output>
+                <button type="button" id="dep-plus" aria-label="Thêm một người">+</button>
+              </span>
+            </div>
+            <div class="row">
+              <span class="row-main"><span class="row-label" id="region-label">Vùng lương</span><span class="row-sub">Nơi cậu làm việc</span></span>
+              <span class="seg" role="radiogroup" aria-labelledby="region-label">
+                <button type="button" role="radio" data-region="1" aria-checked="true" aria-label="Vùng I">I</button>
+                <button type="button" role="radio" data-region="2" aria-checked="false" aria-label="Vùng II" tabindex="-1">II</button>
+                <button type="button" role="radio" data-region="3" aria-checked="false" aria-label="Vùng III" tabindex="-1">III</button>
+                <button type="button" role="radio" data-region="4" aria-checked="false" aria-label="Vùng IV" tabindex="-1">IV</button>
+              </span>
+            </div>
+            <label class="row" for="insurance-base">
+              <span class="row-main">
+                <span class="row-label">Lương đóng BH</span>
+                <span class="row-sub" id="insurance-base-sub" data-default="Để trống nếu bằng gross"></span>
+              </span>
+              <span class="row-input money"><input id="insurance-base" type="text" inputmode="text" placeholder="= gross"
+                spellcheck="false" autocapitalize="off" enterkeyhint="done" aria-describedby="insurance-base-sub"></span>
+            </label>
           </div>
-          <div class="money">
-            <input id="salary" name="salary" type="text" inputmode="text" enterkeyhint="next"
-                   placeholder="vd: 15tr, 15.000.000" aria-describedby="salary-note salary-preview salary-msg"
-                   spellcheck="false" autocapitalize="off">
-            <span class="suffix" aria-hidden="true">đ</span>
-          </div>
-          <p class="note" id="salary-note">Nhập lương thực nhận sau thuế và bảo hiểm, không phải lương gross.</p>
-          <p class="msg" id="salary-msg" role="alert" hidden></p>
-        </div>
-
-        <div class="row">
-          <div class="field">
-            <label for="days">Ngày làm / tháng</label>
-            <input id="days" name="days" type="text" inputmode="decimal" enterkeyhint="next" value="22"
-                   aria-describedby="days-msg">
-            <p class="msg" id="days-msg" role="alert" hidden></p>
-          </div>
-          <div class="field">
-            <label for="hours">Giờ làm / ngày</label>
-            <input id="hours" name="hours" type="text" inputmode="decimal" enterkeyhint="next" value="8"
-                   aria-describedby="hours-msg">
-            <p class="msg" id="hours-msg" role="alert" hidden></p>
-          </div>
-        </div>
-
-        <div class="privacy">
-          <p id="storage-note">🔒 Chỉ lưu trên máy này để lần sau đỡ phải gõ lại. Không gửi đi đâu cả.</p>
-          <button type="button" id="clear" class="link-btn">Xoá dữ liệu đã lưu</button>
-        </div>
-      </section>
-
-      <section class="card" aria-labelledby="item-title">
-        <h2 id="item-title"><span aria-hidden="true">🛍️</span> Món cậu muốn mua</h2>
-
-        <div class="chips" id="chips" role="group" aria-label="Gợi ý nhanh tên món">
-          <button type="button" class="chip" data-name="Ly cà phê"><span aria-hidden="true">☕</span> Cà phê</button>
-          <button type="button" class="chip" data-name="Ly trà sữa"><span aria-hidden="true">🧋</span> Trà sữa</button>
-          <button type="button" class="chip" data-name="Tô phở"><span aria-hidden="true">🍜</span> Tô phở</button>
-          <button type="button" class="chip" data-name="Lần đổ xăng"><span aria-hidden="true">⛽</span> Đổ xăng</button>
-          <button type="button" class="chip" data-name="Vé xem phim"><span aria-hidden="true">🎬</span> Xem phim</button>
-          <button type="button" class="chip" data-name="Bữa lẩu"><span aria-hidden="true">🍲</span> Bữa lẩu</button>
-          <button type="button" class="chip" data-name="Đôi giày mới"><span aria-hidden="true">👟</span> Giày mới</button>
-          <button type="button" class="chip" data-name="iPhone mới"><span aria-hidden="true">📱</span> iPhone</button>
-          <button type="button" class="chip" data-name="Chuyến du lịch"><span aria-hidden="true">✈️</span> Du lịch</button>
-          <button type="button" class="chip" data-name="Căn nhà"><span aria-hidden="true">🏠</span> Mua nhà</button>
-        </div>
-
-        <div class="field">
-          <label for="name">Tên món <span class="optional">(không bắt buộc)</span></label>
-          <input id="name" name="name" type="text" enterkeyhint="next" maxlength="60" placeholder="vd: Ly cà phê">
-        </div>
-
-        <div class="field">
-          <div class="label-row">
-            <label for="price">Giá món đồ</label>
-            <span class="preview" id="price-preview" hidden></span>
-          </div>
-          <div class="money">
-            <input id="price" name="price" type="text" inputmode="text" enterkeyhint="done"
-                   placeholder="vd: 45k, 1,2tr" aria-describedby="price-preview price-msg"
-                   spellcheck="false" autocapitalize="off">
-            <span class="suffix" aria-hidden="true">đ</span>
-          </div>
-          <p class="msg" id="price-msg" role="alert" hidden></p>
-        </div>
-      </section>
-    </form>
-
-    <section class="result" id="result" aria-labelledby="result-title">
-      <h2 id="result-title" class="sr-only">Kết quả</h2>
-      <p class="result-hint" id="result-hint" aria-live="polite"></p>
-      <div id="result-body" hidden>
-        <p class="result-label">Món này tốn của cậu</p>
-        <p class="big" id="big"></p>
-        <p class="detail" id="detail" hidden></p>
-        <p class="months" id="months" hidden></p>
-        <p class="sentence" id="sentence" aria-live="polite"></p>
-        <p class="quip" id="quip"></p>
-        <button type="button" class="share-btn" id="share" disabled>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Chia sẻ
-        </button>
-        <p class="share-note">Ảnh chỉ có tên món, giá và thời gian. Không có lương.</p>
+        </form>
+        <button type="button" class="primary-btn o-4" id="use-net" hidden>Xem món đồ tốn mấy giờ làm →</button>
+        <p class="fine o-5">Ước tính theo Luật Thuế TNCN 109/2025/QH15: biểu 5 bậc, giảm trừ 15,5tr cho bản thân và 6,2tr
+          mỗi người phụ thuộc. Bảo hiểm người lao động đóng 10,5% với mức trần từ 1/7/2026. Phiếu lương thật có thể lệch
+          một chút nếu công ty có khoản trừ khác.</p>
       </div>
-      <p class="rate" id="rate" hidden></p>
+
+      <div class="side side-result">
+        <h2 class="group-title desk-only o-1">Kết quả</h2>
+        <div class="hero o-1" aria-live="polite">
+          <span class="sticker" id="g-sticker" aria-hidden="true">💸</span>
+          <p class="hero-label">Mỗi tháng cầm về</p>
+          <p class="hero-value"><span id="g-net">—</span></p>
+          <div class="bar" id="g-bar" aria-hidden="true" hidden>
+            <span class="b-net" id="bar-net"></span><span class="b-ins" id="bar-ins"></span><span class="b-tax" id="bar-tax"></span>
+          </div>
+          <p class="hero-sub" id="g-sub">Nhập lương gross để xem nhé.</p>
+          <p class="hero-quip" id="g-quip" hidden></p>
+        </div>
+        <section class="group o-3" id="g-detail" hidden>
+          <h2 class="group-title">Bị trừ những gì</h2>
+          <dl class="list" id="g-lines"></dl>
+        </section>
+      </div>
+    </section>
+
+    <!-- ============ Quy ra giờ làm ============ -->
+    <section id="panel-time" class="panel" role="tabpanel" aria-labelledby="tab-time" hidden>
+      <div class="side side-input">
+        <form class="group o-2" novalidate autocomplete="off">
+          <div class="col">
+          <h2 class="group-title">Đang nhắm món gì?</h2>
+          <div class="chips" id="chips" role="group" aria-label="Gợi ý nhanh tên món">
+            <button type="button" class="chip" data-name="Ly cà phê">☕ Cà phê</button>
+            <button type="button" class="chip" data-name="Ly trà sữa">🧋 Trà sữa</button>
+            <button type="button" class="chip" data-name="Tô phở">🍜 Phở</button>
+            <button type="button" class="chip" data-name="Lần đổ xăng">⛽ Đổ xăng</button>
+            <button type="button" class="chip" data-name="Vé xem phim">🎬 Xem phim</button>
+            <button type="button" class="chip" data-name="Đôi giày mới">👟 Giày</button>
+            <button type="button" class="chip" data-name="iPhone mới">📱 iPhone</button>
+            <button type="button" class="chip" data-name="Chuyến du lịch">✈️ Du lịch</button>
+            <button type="button" class="chip" data-name="Căn nhà">🏠 Nhà</button>
+          </div>
+          <div class="list">
+            <label class="row" for="name">
+              <span class="row-main"><span class="row-label">Tên món</span>
+                <span class="row-sub" id="name-sub" data-default="Không bắt buộc"></span></span>
+              <span class="row-input"><input id="name" type="text" list="item-ideas" maxlength="60" placeholder="Ly cà phê" enterkeyhint="next"></span>
+            </label>
+            <label class="row" for="price">
+              <span class="row-main"><span class="row-label">Giá</span>
+                <span class="row-sub" id="price-sub" data-default=""></span></span>
+              <span class="row-input money"><input id="price" type="text" inputmode="text" placeholder="45k"
+                spellcheck="false" autocapitalize="off" enterkeyhint="done" aria-describedby="price-sub"></span>
+            </label>
+          </div>
+          <datalist id="item-ideas">
+            <option value="Ly cà phê"><option value="Ly trà sữa"><option value="Tô phở"><option value="Lần đổ xăng">
+            <option value="Vé xem phim"><option value="Bữa lẩu"><option value="Đôi giày mới"><option value="iPhone mới">
+            <option value="Chuyến du lịch"><option value="Căn nhà">
+          </datalist>
+          </div>
+
+          <div class="col">
+          <h2 class="group-title">Còn cậu thì</h2>
+          <div class="list">
+            <label class="row" for="salary">
+              <span class="row-main"><span class="row-label">Lương về tay / tháng</span>
+                <span class="row-sub" id="salary-sub" data-default="Sau thuế và bảo hiểm"></span></span>
+              <span class="row-input money"><input id="salary" type="text" inputmode="text" placeholder="15tr"
+                spellcheck="false" autocapitalize="off" enterkeyhint="next" aria-describedby="salary-sub"></span>
+            </label>
+            <label class="row" for="days">
+              <span class="row-main"><span class="row-label">Ngày làm / tháng</span>
+                <span class="row-sub" id="days-sub" data-default=""></span></span>
+              <span class="row-input short"><input id="days" type="text" inputmode="decimal" value="22" enterkeyhint="next" aria-describedby="days-sub"></span>
+            </label>
+            <label class="row" for="hours">
+              <span class="row-main"><span class="row-label">Giờ làm / ngày</span>
+                <span class="row-sub" id="hours-sub" data-default=""></span></span>
+              <span class="row-input short"><input id="hours" type="text" inputmode="decimal" value="8" enterkeyhint="done" aria-describedby="hours-sub"></span>
+            </label>
+            <div class="row readonly">
+              <span class="row-main"><span class="row-label">1 giờ của cậu đáng</span></span>
+              <span class="row-value" id="rate">—</span>
+            </div>
+          </div>
+          <p class="group-foot" id="foot-go">Chỉ biết lương gross? <button type="button" class="link-btn" data-go="gross">Tính thực nhận trước</button></p>
+          <p class="group-foot" id="foot-relink" hidden>Đang dùng số cậu tự gõ. <button type="button" class="link-btn" id="relink"></button></p>
+          </div>
+        </form>
+      </div>
+
+      <div class="side side-result">
+        <h2 class="group-title desk-only o-1">Kết quả</h2>
+        <div class="hero o-1" aria-live="polite">
+          <span class="sticker" id="t-sticker" aria-hidden="true">🛍️</span>
+          <p class="hero-label">Món này tốn của cậu</p>
+          <p class="hero-value" id="big">—</p>
+          <p class="hero-detail" id="detail" hidden></p>
+          <p class="hero-sub" id="sentence">Nhập lương và giá món đồ nhé.</p>
+          <button type="button" class="share-btn" id="share" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Chia sẻ ảnh (không có lương)
+          </button>
+        </div>
+      </div>
     </section>
 
     <footer class="foot">
-      Không máy chủ, không theo dõi, không cookie. Mọi phép tính chạy ngay trên máy cậu.
+      <p id="storage-note">Không máy chủ, không theo dõi. Số liệu chỉ lưu trên máy này.</p>
+      <button type="button" id="clear" class="link-btn">Xoá dữ liệu đã lưu</button>
     </footer>
   </main>
 
