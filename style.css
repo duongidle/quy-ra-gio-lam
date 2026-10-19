@@ -575,7 +575,20 @@ dl.list dt small { display: block; font-size: 12.5px; }
 }
 .item-remove:hover, .item-remove:focus-visible { background: var(--accent-soft); color: var(--accent); outline: none; }
 .list-gap { margin-top: 12px; }
-#add-item { text-decoration: none; }
+button.add-row {
+  appearance: none;
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+button.add-row:hover, button.add-row:focus-visible { background: var(--accent-soft); outline: none; }
 
 /* Quy ra đồ đời thường */
 .hero-equiv {
@@ -584,13 +597,6 @@ dl.list dt small { display: block; font-size: 12.5px; }
   font-size: 14.5px;
   font-weight: 600;
   color: var(--ink);
-}
-.hero-equiv small {
-  display: block;
-  margin-top: 2px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--muted);
 }
 
 /* --- Bố cục: điện thoại một cột (kết quả lên đầu), màn rộng hai cột nhập | kết quả --- */

@@ -787,7 +787,6 @@
       tLabel: $('t-label'),
       equiv: $('equiv'),
       items: $('items'),
-      addItem: $('add-item'),
       months: $all('[data-months]'),
       chips: $('chips'),
       gSub: $('g-sub'),
@@ -1031,12 +1030,9 @@
       el.equiv.textContent = '';
       el.equiv.hidden = !r.equivalents.length;
       if (r.equivalents.length) {
-        el.equiv.appendChild(document.createTextNode('Bằng ≈ ' + r.equivalents.map(function (e) {
+        el.equiv.textContent = 'Bằng ≈ ' + r.equivalents.map(function (e) {
           return e.text + ' ' + e.emoji;
-        }).join(' hoặc ')));
-        var note = document.createElement('small');
-        note.textContent = 'giá ước chừng: ' + r.equivalents.map(function (e) { return e.priceNote; }).join(', ');
-        el.equiv.appendChild(note);
+        }).join(' hoặc ');
       }
     }
 
@@ -1103,6 +1099,12 @@
         });
         el.items.appendChild(row);
       });
+      // Nút thêm món nằm luôn trong thẻ, như một dòng cuối
+      var add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'row add-row';
+      add.textContent = '+ Thêm món';
+      el.items.appendChild(add);
       if (focusIndex !== undefined) {
         var rows = el.items.querySelectorAll('.item-row');
         var target = rows[focusIndex] && rows[focusIndex].querySelector(focusField === 'name' ? '.item-name' : '.item-price');
@@ -1445,7 +1447,8 @@
       updateAll(true);
     });
 
-    el.addItem.addEventListener('click', function () {
+    el.items.addEventListener('click', function (e) {
+      if (!e.target.closest('.add-row')) return;
       cart.push({ name: '', price: '' });
       renderCart(cart.length - 1, 'name');
       updateAll(true);
