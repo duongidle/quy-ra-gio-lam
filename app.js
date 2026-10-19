@@ -1586,6 +1586,7 @@
         price.addEventListener('change', function () {
           var f = state.fields.items[idx];
           if (f && f.state === 'ok') { price.value = core.formatNumber(f.value); item.price = price.value; }
+          fitMoneyInput(price);
           updateAll(true);
         });
         el.items.appendChild(row);
@@ -1926,6 +1927,7 @@
         price.addEventListener('change', function () {
           var f = hState.fields[idx] && hState.fields[idx].price;
           if (f && f.state === 'ok') { price.value = core.formatNumber(f.value); h.price = price.value; }
+          fitMoneyInput(price);
           updateAll(true);
           save();
         });
@@ -2495,6 +2497,7 @@
           var f = fieldFor(key);
           if (MONEY_KEYS.indexOf(key) !== -1 && f && f.state === 'ok' && f.value) {
             input.value = core.formatNumber(f.value);
+            fitMoneyInput(input);
           }
           updateAll(true);
           if (key !== 'name' && key !== 'price') save();
@@ -2603,6 +2606,16 @@
       });
     });
 
+    // Số tiền dài (vd 5.000.000.000) thì thu nhỏ chữ trong ô cho khỏi bị cắt
+    function fitMoneyInput(input) {
+      if (!input || !input.closest || !input.closest('.row-input.money')) return;
+      input.classList.toggle('long', input.value.length > 11);
+      input.classList.toggle('longer', input.value.length > 14);
+    }
+    ['input', 'change'].forEach(function (type) {
+      document.addEventListener(type, function (e) { fitMoneyInput(e.target); }, true);
+    });
+
     // Có cả nút data-go tạo động (dòng "Dựa trên lương…"), nên bắt sự kiện ở cấp tài liệu
     document.addEventListener('click', function (e) {
       var btn = e.target.closest('[data-go]');
@@ -2680,5 +2693,6 @@
     // Lần đầu: bắt đầu từ tính lương thực nhận. Đã có lương thực nhận thì vào thẳng quy giờ làm.
     showTab(hashTab || savedTab || (inputs.salary.value.trim() ? 'time' : 'gross'));
     updateAll(true);
+    $all('.row-input.money input').forEach(fitMoneyInput);
   }
 })();

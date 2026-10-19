@@ -15,7 +15,7 @@
   --ins: #CDB8A2;
   --tax: #8C5A3C;
   --warn: #B4620E;
-  --shadow: 0 1px 0 rgba(80, 50, 20, 0.04), 0 12px 28px -18px rgba(120, 60, 20, 0.35);
+  --edge: 1px solid var(--hairline); /* thiết kế phẳng: viền mảnh thay cho đổ bóng */
   --font: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -34,7 +34,6 @@
     --ins: #6E5E50;
     --tax: #D49A6E;
     --warn: #F0B45A;
-    --shadow: 0 1px 0 rgba(0, 0, 0, 0.2), 0 14px 30px -18px rgba(0, 0, 0, 0.8);
   }
 }
 
@@ -127,6 +126,7 @@ h1 {
   margin: 16px 0 6px;
   padding: 22px 18px 20px;
   border-radius: 28px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
   background: var(--accent-soft);
   text-align: center;
 }
@@ -280,7 +280,7 @@ h1 {
   margin: 0;
   background: var(--surface);
   border-radius: 22px;
-  box-shadow: var(--shadow);
+  border: var(--edge);
   overflow: hidden;
 }
 
@@ -352,6 +352,8 @@ div.row { cursor: default; }
   font-weight: 600;
   pointer-events: none;
 }
+.row-input input.long { font-size: 17px; }
+.row-input input.longer { font-size: 15px; }
 .row-input input::placeholder { color: var(--muted); opacity: 0.45; font-weight: 600; }
 .row-input input:focus {
   outline: none;
@@ -450,9 +452,8 @@ dl.list dt small { display: block; font-size: 12.5px; }
 .chip {
   flex: none;
   appearance: none;
-  border: 0;
   background: var(--surface);
-  box-shadow: var(--shadow);
+  border: var(--edge);
   font-size: 14px;
   font-weight: 600;
   padding: 7px 13px;
@@ -498,7 +499,6 @@ dl.list dt small { display: block; font-size: 12.5px; }
   font-size: 16px;
   font-weight: 750;
   cursor: pointer;
-  box-shadow: 0 10px 24px -12px var(--accent);
 }
 .primary-btn:active, .share-btn:active { transform: scale(0.97); }
 
@@ -559,7 +559,7 @@ dl.list dt small { display: block; font-size: 12.5px; }
 .item-name::placeholder { color: var(--muted); opacity: 0.7; font-weight: 500; }
 .item-name:focus { outline: none; border-bottom-color: var(--accent-line); }
 .item-name::-webkit-calendar-picker-indicator { display: none !important; }
-.item-row .row-input { width: 40%; }
+.item-row .row-input { width: 48%; max-width: 200px; }
 .item-remove {
   appearance: none;
   flex: none;
@@ -624,7 +624,6 @@ button.add-row:hover, button.add-row:focus-visible { background: var(--accent-so
 .mode-seg button[aria-checked="true"] {
   background: var(--surface);
   color: var(--accent);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* So sánh 2 offer: bảng 3 cột nhãn | A | B */
@@ -675,7 +674,12 @@ button.add-row:hover, button.add-row:focus-visible { background: var(--accent-so
 .offer-result dd { margin: 0; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Cách mua, mẫu ảnh */
-.seg-text button { padding: 0 9px; font-size: 13px; }
+.seg-text button { padding: 0 9px; font-size: 13px; white-space: nowrap; }
+/* Dòng có nhiều lựa chọn chữ: đưa nút xuống hàng riêng, chia đều bề ngang */
+.row.stack { flex-wrap: wrap; row-gap: 8px; }
+.row.stack .row-main { flex-basis: 100%; }
+.row.stack .seg { width: 100%; }
+.row.stack .seg button { flex: 1; }
 .share-box { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 14px; }
 .share-box .share-btn { margin-top: 0; }
 .seg-mini { height: 30px; }
@@ -723,14 +727,13 @@ dl.list > .row.top dd { color: var(--accent); }
   appearance: none;
   margin-top: 16px;
   padding: 11px 20px;
-  border: 0;
   border-radius: 999px;
   background: var(--surface);
   color: var(--ink);
   font: inherit;
   font-size: 15.5px;
   font-weight: 700;
-  box-shadow: var(--shadow);
+  border: var(--edge);
   cursor: pointer;
 }
 .toilet-btn.active { background: var(--accent); color: var(--accent-ink); }
