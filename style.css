@@ -541,33 +541,19 @@ dl.list dt small { display: block; font-size: 12.5px; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* --- Màn rộng: xếp các khối sang ngang để không phải cuộn --- */
-@media (min-width: 720px) {
-  .wrap { max-width: 900px; padding-top: 28px; }
-  .chips { flex-wrap: wrap; overflow: visible; margin: 0 0 10px; padding: 0; }
+/* --- Bố cục: điện thoại một cột (kết quả lên đầu), màn rộng hai cột nhập | kết quả --- */
+.panel { display: flex; flex-direction: column; }
+.side { display: contents; }
+.o-1 { order: 1; }
+.o-2 { order: 2; }
+.o-3 { order: 3; }
+.o-4 { order: 4; }
+.o-5 { order: 5; }
+.desk-only { display: none; }
 
-  .panel {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 22px 24px;
-    align-items: start;
-    margin-top: 20px;
-  }
-  .split { display: contents; }
-  .col-hero {
-    grid-column: 1;
-    grid-row: 1 / span 3;
-    position: sticky;
-    top: 20px;
-  }
-  .panel > :not(.col-hero), .split > .col { grid-column: 2; }
-  .panel .hero { margin-top: 0; }
-  .panel .group { margin: 0; }
-  .panel .group-title { margin-top: 0; }
-}
+@media (min-width: 860px) {
+  .wrap { max-width: 1040px; padding: 32px 28px 32px; }
 
-@media (min-width: 960px) {
-  .wrap { max-width: 1180px; padding-left: 28px; padding-right: 28px; }
   .top {
     display: flex;
     align-items: center;
@@ -575,11 +561,28 @@ dl.list dt small { display: block; font-size: 12.5px; }
     gap: 24px;
   }
   .brand { margin: 0; }
-  .tabs { width: 440px; flex: none; }
+  .tabs { width: 400px; flex: none; }
 
-  .panel { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); }
-  .col-hero { grid-row: auto; }
-  .panel > :not(.col-hero), .split > .col { grid-column: auto; }
+  .panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+    margin-top: 28px;
+  }
+  .side { display: flex; flex-direction: column; gap: 14px; }
+  .side-result { position: sticky; top: 20px; }
+  .desk-only { display: block; }
+
+  .panel .hero, .panel .group, .panel .primary-btn { margin: 0; }
+  .side > .group-title, .panel .group-title { margin: 0 6px 10px; }
+  .side > .group-title { margin-bottom: -4px; }
+  .side-input .col + .col { margin-top: 24px; }
+  .panel .fine { margin-top: 0; }
+
+  .chips { flex-wrap: wrap; overflow: visible; margin: 0 0 12px; padding: 0 2px; }
+  dl.list > .row { min-height: 44px; padding-top: 7px; padding-bottom: 7px; }
+  .hero { padding: 24px 22px 22px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
