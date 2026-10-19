@@ -44,7 +44,7 @@ index.html   Toàn bộ markup 5 tab, CSP, ?v= cache-busting cho CSS/JS
 style.css    Token màu (sáng/tối), list-row, hero, tab, bố cục mobile/desktop
 app.js       Nửa trên: hàm thuần (không đụng DOM). Nửa dưới: initUI() — mọi thứ DOM
 test.js      Test bằng node:assert, không thư viện. Chạy: node test.js
-_headers     Header bảo mật cho Cloudflare Pages (GitHub Pages bỏ qua)
+_headers     Header bảo mật (CSP, frame-ancestors…) cho Cloudflare Pages
 README.md    Mô tả ngắn, cách chạy và deploy
 ```
 
@@ -145,7 +145,7 @@ Người dùng đã đổi ý nhiều lần; trạng thái hiện tại là kế
 
 ## Bẫy đã gặp (đừng tái phạm)
 
-- **Cache lệch phiên bản**: GitHub Pages cache ~10 phút; HTML mới + CSS cũ làm vỡ giao diện. **Mỗi lần sửa `style.css`
+- **Cache lệch phiên bản**: trình duyệt và CDN giữ bản cũ; HTML mới + CSS cũ làm vỡ giao diện. **Mỗi lần sửa `style.css`
   hoặc `app.js` phải tăng `?v=` tương ứng trong `index.html`.**
 - **Hash trùng id**: hash `#gross` trùng `<input id="gross">` khiến trình duyệt tự cuộn và focus vào ô. Hash tab phải khác mọi id.
 - **Bố cục xê dịch làm trượt cú chạm**: chữ/phần tử co lại đúng lúc người dùng chạm (do blur → đổi chữ) làm cú chạm rơi
