@@ -394,7 +394,7 @@
     hintOffersFix: 'Có ô của offer đang chưa ổn, xem lại giúp tớ nhé.',
     hintHabits: 'Nhập giá một thói quen bên dưới xem nó ăn bao nhiêu ngày công.',
     timesInvalid: 'Số lần phải là số lớn hơn 0, ví dụ 5.',
-    hintNeedSalary: 'Cần lương về tay ở tab Mua sắm trước đã nhé.'
+    hintNeedSalary: 'Cần lương về tay ở tab Quy ra giờ trước đã nhé.'
   };
 
   /*
@@ -927,7 +927,7 @@
 
   /**
    * raw = { habits: [{ name, price, times, per: 'day'|'week'|'month' }] }
-   * ctx = { hourlyRate, hours, days } lấy từ tab Mua sắm (có thể null nếu chưa có lương).
+   * ctx = { hourlyRate, hours, days } lấy từ tab Quy ra giờ (có thể null nếu chưa có lương).
    */
   function evaluateHabits(raw, ctx) {
     var habits = raw.habits || [];
@@ -1157,8 +1157,8 @@
     var gInputs = { gross: $('gross'), allowance: $('allowance'), insuranceBase: $('insurance-base') };
     var MONEY_KEYS = ['salary', 'price', 'gross', 'allowance', 'insuranceBase'];
     var gross = { dependents: 0, region: '1' };
-    // Lương về tay ở tab giờ làm tự đi theo kết quả tab lương, cho tới khi người dùng tự gõ số khác.
-    // Ai sửa sau cùng thì thắng: chỉnh lại bên tab lương thì nó lại đồng bộ.
+    // Lương về tay ở tab giờ làm tự đi theo kết quả tab Cầm về, cho tới khi người dùng tự gõ số khác.
+    // Ai sửa sau cùng thì thắng: chỉnh lại bên tab Cầm về thì nó lại đồng bộ.
     var salaryLinked = true;
 
     var el = {
@@ -1794,9 +1794,10 @@
 
       el.gLines.textContent = '';
       if (calcMode === 'net') line('Gross cần xin', core.formatVND(g.gross));
-      line('BHXH 8%', '−' + core.formatVND(g.bhxh), '', g.socialCapped ? 'Đã chạm mức trần' : '');
-      line('BHYT 1,5%', '−' + core.formatVND(g.bhyt), '', g.socialCapped ? 'Đã chạm mức trần' : '');
-      line('BHTN 1%', '−' + core.formatVND(g.bhtn), '', g.unemploymentCapped ? 'Đã chạm mức trần' : '');
+      // Gộp 3 loại bảo hiểm vào một dòng, chi tiết để ở dòng nhỏ cho bảng gọn
+      line('Bảo hiểm 10,5%', '−' + core.formatVND(g.insurance), '',
+        'BHXH ' + core.formatVND(g.bhxh) + ' · BHYT ' + core.formatVND(g.bhyt) + ' · BHTN ' + core.formatVND(g.bhtn) +
+        (g.socialCapped || g.unemploymentCapped ? ' · đã chạm trần' : ''));
       line('Thuế TNCN', g.tax ? '−' + core.formatVND(g.tax) : '0đ', '',
         'Tính trên ' + core.formatVND(g.taxable) + ' sau giảm trừ ' + core.formatVND(g.deduction));
       if (g.allowance) line('Phụ cấp miễn thuế', '+' + core.formatVND(g.allowance), 'plus');
@@ -1854,11 +1855,11 @@
         inputs.salary.value = core.formatNumber(gState.result.net);
       }
       $('salary-sub').setAttribute('data-default', salaryLinked && gState.result
-        ? '✨ Tự lấy từ tab lương'
+        ? '✨ Tự lấy từ tab Cầm về'
         : 'Sau thuế và bảo hiểm');
       el.footGo.hidden = !!gState.result;
       el.footRelink.hidden = !gState.result || salaryLinked;
-      if (gState.result) el.relink.textContent = 'Dùng lại ' + core.formatVND(gState.result.net) + ' từ tab lương';
+      if (gState.result) el.relink.textContent = 'Dùng lại ' + core.formatVND(gState.result.net) + ' từ tab Cầm về';
 
       oState = core.evaluateOffers({ a: offers.a, b: offers.b, dependents: gross.dependents, region: gross.region });
 
@@ -1883,7 +1884,7 @@
       }
     }
 
-    // Lương mỗi giờ, giờ/ngày, ngày/tháng lấy từ tab Mua sắm, dùng chung cho Thói quen và Đồng hồ
+    // Lương mỗi giờ, giờ/ngày, ngày/tháng lấy từ tab Quy ra giờ, dùng chung cho Thói quen và Đồng hồ
     function workContext() {
       if (!state || state.hourlyRate === null) return null;
       return {
@@ -1907,7 +1908,7 @@
         go.textContent = 'Sửa';
       } else {
         node.appendChild(document.createTextNode('Chưa có lương về tay. '));
-        go.textContent = 'Nhập ở tab Mua sắm';
+        go.textContent = 'Nhập ở tab Quy ra giờ';
       }
       node.appendChild(go);
     }

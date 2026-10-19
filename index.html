@@ -12,8 +12,8 @@
   <meta name="theme-color" content="#171310" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%23FDE6D8' stroke='%23D9531E' stroke-width='6'/%3E%3Cpath d='M32 18v14l10 6' fill='none' stroke='%23D9531E' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
   <!-- Đổi ?v= mỗi lần sửa CSS/JS để trình duyệt không dùng bản cũ trong cache -->
-  <link rel="stylesheet" href="style.css?v=19">
-  <script src="app.js?v=19" defer></script>
+  <link rel="stylesheet" href="style.css?v=23">
+  <script src="app.js?v=21" defer></script>
 </head>
 <body>
   <main class="wrap">
@@ -31,8 +31,8 @@
         </div>
       </div>
       <div class="tabs" role="tablist" aria-label="Công cụ">
-        <button type="button" role="tab" id="tab-gross" data-tab="gross" aria-controls="panel-gross" aria-selected="true">Lương</button>
-        <button type="button" role="tab" id="tab-time" data-tab="time" aria-controls="panel-time" aria-selected="false" tabindex="-1">Mua sắm</button>
+        <button type="button" role="tab" id="tab-gross" data-tab="gross" aria-controls="panel-gross" aria-selected="true">Cầm về</button>
+        <button type="button" role="tab" id="tab-time" data-tab="time" aria-controls="panel-time" aria-selected="false" tabindex="-1">Quy ra giờ</button>
         <button type="button" role="tab" id="tab-habit" data-tab="habit" aria-controls="panel-habit" aria-selected="false" tabindex="-1">Thói quen</button>
         <button type="button" role="tab" id="tab-clock" data-tab="clock" aria-controls="panel-clock" aria-selected="false" tabindex="-1">Đồng hồ</button>
         <button type="button" role="tab" id="tab-data" data-tab="data" aria-controls="panel-data" aria-selected="false" tabindex="-1">Dữ liệu</button>
@@ -41,12 +41,12 @@
 
     <!-- ============ Lương thực nhận (gross → net) ============ -->
     <section id="panel-gross" class="panel" role="tabpanel" aria-labelledby="tab-gross">
+      <div class="mode-seg o-0" role="radiogroup" aria-label="Tính kiểu nào">
+        <button type="button" role="radio" data-mode="gross" aria-checked="true">Gross → Net</button>
+        <button type="button" role="radio" data-mode="net" aria-checked="false" tabindex="-1">Net → Gross</button>
+        <button type="button" role="radio" data-mode="offers" aria-checked="false" tabindex="-1">So 2 offer</button>
+      </div>
       <div class="side side-input">
-        <div class="mode-seg o-0" role="radiogroup" aria-label="Tính kiểu nào">
-          <button type="button" role="radio" data-mode="gross" aria-checked="true">Gross → Net</button>
-          <button type="button" role="radio" data-mode="net" aria-checked="false" tabindex="-1">Net → Gross</button>
-          <button type="button" role="radio" data-mode="offers" aria-checked="false" tabindex="-1">So 2 offer</button>
-        </div>
         <form class="group o-2" id="gross-form" novalidate autocomplete="off">
           <h2 class="group-title">Trên hợp đồng ghi</h2>
           <div class="list">
@@ -318,7 +318,7 @@
           <p class="hero-label" id="c-label">Hôm nay cậu đã kiếm</p>
           <p class="hero-value empty" id="c-big">—</p>
           <div class="bar" id="c-bar" aria-hidden="true" hidden><span class="b-net" id="c-progress"></span></div>
-          <p class="hero-sub" id="c-sub">Cần lương về tay ở tab Mua sắm trước đã nhé.</p>
+          <p class="hero-sub" id="c-sub">Cần lương về tay ở tab Quy ra giờ trước đã nhé.</p>
           <button type="button" class="toilet-btn" id="toilet" hidden>🚽 Đang đi vệ sinh</button>
           <p class="toilet-live" id="toilet-live" aria-live="polite" hidden></p>
           <p class="hero-quip" id="toilet-quip" hidden></p>
