@@ -12,8 +12,8 @@
   <meta name="theme-color" content="#171310" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='26' fill='%23FDE6D8' stroke='%23D9531E' stroke-width='6'/%3E%3Cpath d='M32 18v14l10 6' fill='none' stroke='%23D9531E' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
   <!-- Đổi ?v= mỗi lần sửa CSS/JS để trình duyệt không dùng bản cũ trong cache -->
-  <link rel="stylesheet" href="style.css?v=10">
-  <script src="app.js?v=10" defer></script>
+  <link rel="stylesheet" href="style.css?v=11">
+  <script src="app.js?v=11" defer></script>
 </head>
 <body>
   <main class="wrap">
@@ -127,18 +127,19 @@
             <button type="button" class="chip" data-name="Chuyến du lịch">✈️ Du lịch</button>
             <button type="button" class="chip" data-name="Căn nhà">🏠 Nhà</button>
           </div>
-          <div class="list">
-            <label class="row" for="name">
-              <span class="row-main"><span class="row-label">Tên món</span>
-                <span class="row-sub" id="name-sub" data-default="Không bắt buộc"></span></span>
-              <span class="row-input"><input id="name" type="text" list="item-ideas" maxlength="60" placeholder="Ly cà phê" enterkeyhint="next"></span>
-            </label>
-            <label class="row" for="price">
-              <span class="row-main"><span class="row-label">Giá</span>
-                <span class="row-sub" id="price-sub" data-default=""></span></span>
-              <span class="row-input money"><input id="price" type="text" inputmode="text" placeholder="45k"
-                spellcheck="false" autocapitalize="off" enterkeyhint="done" aria-describedby="price-sub"></span>
-            </label>
+          <div class="list" id="items"></div>
+          <p class="group-foot"><button type="button" class="link-btn" id="add-item">+ Thêm món vào giỏ</button></p>
+          <div class="list list-gap">
+            <div class="row">
+              <span class="row-main"><span class="row-label" id="inst-label">Trả góp</span><span class="row-sub">Lãi 0%</span></span>
+              <span class="seg" role="radiogroup" aria-labelledby="inst-label">
+                <button type="button" role="radio" data-months="0" aria-checked="true">Không</button>
+                <button type="button" role="radio" data-months="3" aria-checked="false" aria-label="3 tháng" tabindex="-1">3</button>
+                <button type="button" role="radio" data-months="6" aria-checked="false" aria-label="6 tháng" tabindex="-1">6</button>
+                <button type="button" role="radio" data-months="12" aria-checked="false" aria-label="12 tháng" tabindex="-1">12</button>
+                <button type="button" role="radio" data-months="24" aria-checked="false" aria-label="24 tháng" tabindex="-1">24</button>
+              </span>
+            </div>
           </div>
           <datalist id="item-ideas">
             <option value="Ly cà phê"><option value="Ly trà sữa"><option value="Tô phở"><option value="Lần đổ xăng">
@@ -181,9 +182,10 @@
         <h2 class="group-title desk-only o-1">Kết quả</h2>
         <div class="hero o-1" aria-live="polite">
           <span class="sticker" id="t-sticker" aria-hidden="true">🛍️</span>
-          <p class="hero-label">Món này tốn của cậu</p>
+          <p class="hero-label" id="t-label">Món này tốn của cậu</p>
           <p class="hero-value" id="big">—</p>
           <p class="hero-detail" id="detail" hidden></p>
+          <p class="hero-equiv" id="equiv" hidden></p>
           <p class="hero-sub" id="sentence">Nhập lương và giá món đồ nhé.</p>
           <button type="button" class="share-btn" id="share" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>

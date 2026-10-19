@@ -417,5 +417,88 @@ test('câu bình luận theo thời gian: đủ mọi mức, ổn định theo h
   Q.TIME_QUIPS.concat(Q.TAX_QUIPS).forEach((b) => assert.ok(b.lines.length >= 3));
 });
 
+/* ---------- Giỏ hàng ---------- */
+const evc = (items, patch) => Q.evaluate(Object.assign({ salary: '15tr', days: '22', hours: '8', items }, patch));
+
+test('giỏ nhiều món: cộng tổng, câu nói về giỏ', () => {
+  const out = evc([{ name: 'Ly cà phê', price: '45k' }, { name: 'Tô phở', price: '60k' }, { name: 'Vé xem phim', price: '120k' }]);
+  assert.equal(out.result.price, 225000);
+  assert.equal(out.result.count, 3);
+  assert.equal(out.result.name, 'Giỏ 3 món');
+  assert.match(out.result.sentence, /^Giỏ 3 món 225\.000đ này đáng .+ của cậu\.$/);
+  noBadNumbers(out);
+});
+
+test('giỏ: bỏ qua dòng chưa có giá, báo dòng gõ sai', () => {
+  const ok = evc([{ name: 'Ly cà phê', price: '45k' }, { name: 'Tô phở', price: '' }]);
+  assert.equal(ok.result.price, 45000);
+  assert.equal(ok.result.count, 1);
+  assert.match(ok.result.sentence, /^Ly cà phê 45\.000đ/);
+  const bad = evc([{ name: 'Ly cà phê', price: '45k' }, { name: 'Tô phở', price: 'abc' }]);
+  assert.equal(bad.result, null);
+  assert.equal(bad.fields.items[1].state, 'invalid');
+  assert.match(bad.hint, /chưa đọc được giá/);
+  const empty = evc([{ name: '', price: '' }, { name: 'x', price: '' }]);
+  assert.equal(empty.result, null);
+  assert.match(empty.hint, /nhập giá/);
+  noBadNumbers(bad);
+});
+
+test('giỏ: tổng quá lớn thì báo, không NaN/Infinity', () => {
+  const out = evc([{ name: 'a', price: '900000 tỷ' }, { name: 'b', price: '900000 tỷ' }]);
+  assert.equal(out.result, null);
+  assert.ok(out.hint);
+  noBadNumbers(out);
+});
+
+/* ---------- Trả góp ---------- */
+test('trả góp 12 tháng: chia đều, số to theo tháng', () => {
+  const out = evc([{ name: 'iPhone mới', price: '30tr' }], { installment: 12 });
+  const i = out.result.installment;
+  assert.equal(i.months, 12);
+  assert.equal(i.perMonth, 2500000);
+  assert.ok(Math.abs(i.share - 2500000 / 15000000) < 1e-9);
+  assert.equal(i.perDuration.text, Q.formatDuration(out.result.minutes / 12, 8, 22).text);
+  assert.match(out.result.sentence, /^Trả góp 12 tháng: mỗi tháng 2\.500\.000đ, đáng .+ của cậu\.$/);
+  assert.ok(Q.INSTALLMENT_QUIPS[2].lines.some((l) => out.result.quip === l.replace('{per}', i.perDuration.text).replace('{n}', '12')), out.result.quip);
+  assert.equal(out.result.price, 30000000); // tổng vẫn giữ để chia sẻ ảnh
+  noBadNumbers(out);
+});
+
+test('trả góp: không bật thì không có, câu theo đúng mức', () => {
+  assert.equal(evc([{ name: 'x', price: '1tr' }]).result.installment, null);
+  assert.equal(evc([{ name: 'x', price: '1tr' }], { installment: 0 }).result.installment, null);
+  const levels = [[0.01, 0], [0.1, 1], [0.2, 2], [0.5, 3], [1.5, 4]];
+  for (const [share, k] of levels) {
+    const text = Q.installmentQuip(share, '2 ngày làm việc', 12, 'seed');
+    assert.ok(Q.INSTALLMENT_QUIPS[k].lines.map((l) => l.replace('{per}', '2 ngày làm việc').replace('{n}', '12')).includes(text), text);
+    assert.ok(!/[{}]/.test(text));
+  }
+});
+
+/* ---------- Quy ra đồ đời thường ---------- */
+test('quy đổi: tối đa 2 món, số lượng dễ hình dung, có ghi giá dùng để so', () => {
+  const eq = Q.equivalents(1000000, 'Tai nghe');
+  assert.ok(eq.length >= 1 && eq.length <= 2);
+  for (const e of eq) {
+    assert.ok(e.count >= 1.5 && e.count <= 999, e.text);
+    assert.match(e.priceNote, /\d/);
+  }
+  assert.equal(eq.length, 2);
+  assert.notEqual(eq[0].text, eq[1].text);
+  assert.deepEqual(Q.equivalents(1000000, 'Tai nghe'), eq); // ổn định
+});
+
+test('quy đổi: không so món với chính nó, quá rẻ thì bỏ', () => {
+  const eq = Q.equivalents(350000, 'Ly cà phê');
+  assert.ok(eq.length && eq.every((e) => !/cà phê/.test(e.text)), JSON.stringify(eq));
+  assert.deepEqual(Q.equivalents(5000, 'x'), []);
+  assert.ok(Q.equivalents(900e9, 'x').length >= 1);
+  // 1,3tr: chọn vé phim và phở chứ không phải 261 cốc trà đá
+  assert.deepEqual(Q.equivalents(1305000, 'x').map((e) => e.text), ['26 tô phở', '13 vé xem phim']); // 900 tỷ vẫn quy ra được căn chung cư
+  const r = evc([{ name: 'Bữa lẩu', price: '800k' }]).result;
+  assert.ok(Array.isArray(r.equivalents) && r.equivalents.length > 0);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

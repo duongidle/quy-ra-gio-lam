@@ -2,7 +2,8 @@
 
 Hai công cụ trong một trang:
 
-- **Quy ra giờ làm**: nhập lương thực nhận và một món đồ, trang quy giá món đồ ra thời gian làm việc.
+- **Quy ra giờ làm**: nhập lương thực nhận và một hoặc nhiều món (giỏ hàng), trang quy tổng giá ra thời gian làm việc,
+  kèm tuỳ chọn trả góp 0% (mỗi tháng tốn bao nhiêu giờ làm) và quy đổi ra đồ đời thường với giá ước chừng.
   "À, hoá ra ly cà phê này tốn của mình 32 phút làm việc."
 - **Lương thực nhận**: nhập lương gross, trang trừ bảo hiểm (BHXH 8%, BHYT 1,5%, BHTN 1%) và thuế TNCN
   (biểu 5 bậc, Luật 109/2025/QH15), rồi cộng phụ cấp miễn thuế trả ngoài gross, để ra lương thực nhận ước tính.

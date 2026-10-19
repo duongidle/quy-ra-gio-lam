@@ -541,6 +541,58 @@ dl.list dt small { display: block; font-size: 12.5px; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+/* --- Giỏ hàng --- */
+.item-row { gap: 10px; }
+.item-row .row-main { flex: 1; }
+.item-name {
+  width: 100%;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px dashed transparent;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px; /* >= 16px để iOS không tự phóng to */
+  font-weight: 600;
+}
+.item-name::placeholder { color: var(--muted); opacity: 0.7; font-weight: 500; }
+.item-name:focus { outline: none; border-bottom-color: var(--accent-line); }
+.item-name::-webkit-calendar-picker-indicator { display: none !important; }
+.item-row .row-input { width: 40%; }
+.item-remove {
+  appearance: none;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-right: -6px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.item-remove:hover, .item-remove:focus-visible { background: var(--accent-soft); color: var(--accent); outline: none; }
+.list-gap { margin-top: 12px; }
+#add-item { text-decoration: none; }
+
+/* Quy ra đồ đời thường */
+.hero-equiv {
+  margin: 10px auto 0;
+  max-width: 36ch;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.hero-equiv small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
 /* --- Bố cục: điện thoại một cột (kết quả lên đầu), màn rộng hai cột nhập | kết quả --- */
 .panel { display: flex; flex-direction: column; }
 .side { display: contents; }

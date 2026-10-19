@@ -510,16 +510,110 @@
     return { state: 'ok', value: v };
   }
 
+  /*
+   * Quy ra đồ đời thường. Giá ở đây chỉ để so sánh cho vui, không phải giá món người dùng nhập,
+   * nên trang luôn ghi rõ giá đang dùng.
+   */
+  var EVERYDAY = [
+    { name: 'cốc trà đá', short: 'trà đá', price: 5000, emoji: '🧊' },
+    { name: 'ly cà phê', short: 'cà phê', price: 35000, emoji: '☕' },
+    { name: 'ly trà sữa', short: 'trà sữa', price: 45000, emoji: '🧋' },
+    { name: 'tô phở', short: 'phở', price: 50000, emoji: '🍜' },
+    { name: 'vé xem phim', short: 'vé phim', price: 100000, emoji: '🎬' },
+    { name: 'bữa lẩu', short: 'lẩu', price: 400000, emoji: '🍲' },
+    { name: 'đôi giày', short: 'giày', price: 1500000, emoji: '👟' },
+    { name: 'chiếc iPhone', short: 'iPhone', price: 30000000, emoji: '📱' },
+    { name: 'căn chung cư', short: 'chung cư', price: 3000000000, emoji: '🏢' }
+  ];
+
+  function shortPrice(v) {
+    if (v >= 1e9) return formatNumber(v / 1e9, 1) + ' tỷ';
+    if (v >= 1e6) return formatNumber(v / 1e6, 1) + 'tr';
+    return formatNumber(v / 1e3, 1) + 'k';
+  }
+
+  /**
+   * Tối đa 2 món đời thường có số lượng dễ hình dung (từ 1,5 đến 999), bỏ qua món trùng tên
+   * với thứ người dùng đang mua. Trả về [] nếu không có món nào hợp.
+   */
+  function equivalents(total, names) {
+    var text = String(names || '').toLowerCase();
+    var fits = EVERYDAY.filter(function (ref) {
+      var n = total / ref.price;
+      return n >= 1.5 && n <= 999 && text.indexOf(ref.short.toLowerCase()) === -1;
+    });
+    if (!fits.length) return [];
+    // Ưu tiên con số dễ hình dung nhất (gần ~15): "13 vé phim" dễ cảm hơn "261 cốc trà đá"
+    var picks = fits.slice().sort(function (a, b) {
+      return Math.abs(Math.log(total / a.price / 15)) - Math.abs(Math.log(total / b.price / 15));
+    }).slice(0, 2);
+    picks.sort(function (a, b) { return a.price - b.price; });
+    return picks.map(function (ref) {
+      var n = total / ref.price;
+      return {
+        count: n,
+        text: formatNumber(n, n < 10 ? 1 : 0) + ' ' + ref.name,
+        emoji: ref.emoji,
+        priceNote: ref.short + ' ' + shortPrice(ref.price)
+      };
+    });
+  }
+
+  var INSTALLMENT_MONTHS = [0, 3, 6, 12, 24];
+
+  // Câu bình luận cho trả góp, chia theo phần lương mỗi tháng phải gánh.
+  var INSTALLMENT_QUIPS = [
+    { upTo: function (share) { return share < 0.05; }, lines: [
+      'Mỗi tháng {per}, trong {n} tháng. Nhẹ hều!',
+      'Góp {per} mỗi tháng. Không thấm vào đâu. Duyệt!',
+      'Mỗi tháng {per}. Trả góp mà như không. Ngon!'
+    ] },
+    { upTo: function (share) { return share < 0.15; }, lines: [
+      'Mỗi tháng {per}, trong {n} tháng. Dài hơi ghê.',
+      'Góp {per} mỗi tháng suốt {n} tháng. Nhớ đừng góp thêm món nữa nha.',
+      'Mỗi tháng {per}. Chưa đau, nhưng {n} tháng là lâu đó.'
+    ] },
+    { upTo: function (share) { return share < 0.35; }, lines: [
+      'Gánh {per} mỗi tháng suốt {n} tháng. Gồng nha.',
+      'Mỗi tháng {per}. Cuối tháng ăn mì là có thật 🍜',
+      'Góp {per} mỗi tháng trong {n} tháng. Ví sẽ nhớ cậu lắm.'
+    ] },
+    { upTo: function (share) { return share < 1; }, lines: [
+      'Mỗi tháng {per}. Lương về là đi luôn. Toang.',
+      'Góp {per} mỗi tháng. Phần còn lại để thở thôi 🫠',
+      '{n} tháng gồng {per} mỗi tháng. Nghĩ lại không?'
+    ] },
+    { upTo: function () { return true; }, lines: [
+      'Tiền góp mỗi tháng còn hơn cả lương. Thôi xong.',
+      'Góp {per} mỗi tháng mà lương không đủ trả. Hết cứu.',
+      'Trả góp kiểu này là đi làm nuôi cửa hàng. Bye.'
+    ] }
+  ];
+
+  function installmentQuip(share, perText, months, seed) {
+    for (var i = 0; i < INSTALLMENT_QUIPS.length; i++) {
+      if (INSTALLMENT_QUIPS[i].upTo(share)) {
+        return pickLine(INSTALLMENT_QUIPS[i].lines, seed).replace('{per}', perText).replace('{n}', String(months));
+      }
+    }
+    return '';
+  }
+
   /**
    * Trạng thái tab "Quy ra giờ làm" từ các chuỗi người dùng gõ.
-   * raw = { salary, days, hours, name, price } — salary là lương thực nhận.
+   * raw = { salary, days, hours, items: [{ name, price }], installment } — salary là lương thực nhận,
+   * installment là số tháng trả góp (0 = trả thẳng). Vẫn nhận { name, price } cho một món.
    */
   function evaluate(raw) {
+    var items = raw.items || [{ name: raw.name, price: raw.price }];
+    var itemFields = items.map(function (it) { return checkMoney(it.price, 'price'); });
+    var bad = itemFields.filter(function (f) { return f.state !== 'ok' && f.state !== 'empty'; })[0];
     var f = {
       salary: checkMoney(raw.salary, 'salary'),
       days: checkCount(raw.days, 'days'),
       hours: checkCount(raw.hours, 'hours'),
-      price: checkMoney(raw.price, 'price')
+      items: itemFields,
+      price: items.length === 1 ? itemFields[0] : (bad || { state: itemFields.some(function (x) { return x.state === 'ok'; }) ? 'ok' : 'empty' })
     };
     var out = { fields: f, hourlyRate: null, result: null, hint: null };
 
@@ -528,25 +622,67 @@
       out.hourlyRate = f.salary.value / (f.days.value * f.hours.value);
     }
 
+    var chosen = [];
+    items.forEach(function (it, idx) {
+      if (itemFields[idx].state === 'ok') chosen.push({ name: cleanName(it.name), price: itemFields[idx].value });
+    });
+
     if (f.salary.state !== 'ok') {
       out.hint = f.salary.state === 'empty' ? MSG.hintSalary : MSG.hintSalaryFix;
     } else if (!incomeOk) {
       out.hint = MSG.hintSchedule;
-    } else if (f.price.state === 'empty') {
+    } else if (bad) {
+      out.hint = bad.message;
+    } else if (!chosen.length) {
       out.hint = MSG.hintPrice;
-    } else if (f.price.state !== 'ok') {
-      out.hint = f.price.message;
     } else {
-      var minutes = f.price.value / out.hourlyRate * 60;
-      var duration = formatDuration(minutes, f.hours.value, f.days.value);
-      out.result = {
-        name: cleanName(raw.name),
-        price: f.price.value,
+      var total = chosen.reduce(function (sum, it) { return sum + it.price; }, 0);
+      if (total > MAX_MONEY) {
+        out.hint = MSG.tooLarge;
+        return out;
+      }
+      var hours = f.hours.value;
+      var days = f.days.value;
+      var names = chosen.map(function (it) { return it.name; }).join(', ');
+      var seed = names + '|' + total;
+      var minutes = total / out.hourlyRate * 60;
+      var duration = formatDuration(minutes, hours, days);
+      var single = chosen.length === 1;
+      var title = single ? chosen[0].name : 'Giỏ ' + chosen.length + ' món';
+
+      var result = {
+        name: title,
+        price: total,
+        count: chosen.length,
+        items: chosen,
         minutes: minutes,
         duration: duration,
-        sentence: buildSentence(raw.name, f.price.value, duration),
-        quip: quip(minutes, f.hours.value, f.days.value, cleanName(raw.name) + '|' + f.price.value)
+        sentence: single
+          ? buildSentence(chosen[0].name, total, duration)
+          : 'Giỏ ' + chosen.length + ' món ' + formatVND(total) + ' này đáng ' + duration.phrase + ' của cậu.',
+        quip: quip(minutes, hours, days, seed),
+        equivalents: equivalents(total, names),
+        installment: null
       };
+
+      var months = Number(raw.installment) || 0;
+      if (months > 0) {
+        var per = total / months;
+        var perMinutes = minutes / months;
+        var perDuration = formatDuration(perMinutes, hours, days);
+        var share = per / f.salary.value;
+        result.installment = {
+          months: months,
+          perMonth: Math.round(per),
+          perMinutes: perMinutes,
+          perDuration: perDuration,
+          share: share
+        };
+        result.sentence = 'Trả góp ' + months + ' tháng: mỗi tháng ' + formatVND(Math.round(per)) +
+          ', đáng ' + perDuration.phrase + ' của cậu.';
+        result.quip = installmentQuip(share, perDuration.text, months, seed);
+      }
+      out.result = result;
     }
     return out;
   }
@@ -589,6 +725,11 @@
     buildSentence: buildSentence,
     capitalizeFirst: capitalizeFirst,
     quip: quip,
+    EVERYDAY: EVERYDAY,
+    equivalents: equivalents,
+    INSTALLMENT_MONTHS: INSTALLMENT_MONTHS,
+    INSTALLMENT_QUIPS: INSTALLMENT_QUIPS,
+    installmentQuip: installmentQuip,
     TIME_QUIPS: TIME_QUIPS,
     TAX_QUIPS: TAX_QUIPS,
     stickerFor: stickerFor,
@@ -620,7 +761,10 @@
     function $all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
 
     // Ô nhập tab "Quy ra giờ làm" và tab "Lương thực nhận"; mỗi ô có một dòng phụ <id>-sub
-    var inputs = { salary: $('salary'), days: $('days'), hours: $('hours'), name: $('name'), price: $('price') };
+    var inputs = { salary: $('salary'), days: $('days'), hours: $('hours') };
+    // Giỏ hàng chỉ sống trong phiên này, không lưu lại (lưu lịch sử nằm ngoài phạm vi)
+    var cart = [{ name: '', price: '' }];
+    var installment = 0;
     var gInputs = { gross: $('gross'), allowance: $('allowance'), insuranceBase: $('insurance-base') };
     var MONEY_KEYS = ['salary', 'price', 'gross', 'allowance', 'insuranceBase'];
     var gross = { dependents: 0, region: '1' };
@@ -640,6 +784,11 @@
       gQuip: $('g-quip'),
       gSticker: $('g-sticker'),
       tSticker: $('t-sticker'),
+      tLabel: $('t-label'),
+      equiv: $('equiv'),
+      items: $('items'),
+      addItem: $('add-item'),
+      months: $all('[data-months]'),
       chips: $('chips'),
       gSub: $('g-sub'),
       gBar: $('g-bar'),
@@ -843,28 +992,148 @@
         ? core.formatVND(Math.round(state.hourlyRate))
         : '—';
 
+      renderItemSubs(showErrors);
+      el.months.forEach(function (btn) {
+        var on = Number(btn.getAttribute('data-months')) === installment;
+        btn.setAttribute('aria-checked', on ? 'true' : 'false');
+        btn.tabIndex = on ? 0 : -1;
+      });
+
       var r = state.result;
       el.share.hidden = !r;
+      el.tLabel.textContent = r && r.installment ? 'Mỗi tháng tốn của cậu'
+        : (r && r.count > 1 ? 'Giỏ này tốn của cậu' : 'Món này tốn của cậu');
       if (!r) {
         el.big.textContent = '—';
         el.big.classList.add('empty');
         el.detail.hidden = true;
+        el.equiv.hidden = true;
         el.sentence.textContent = state.hint;
         el.sentence.classList.remove('result-text');
         el.tSticker.textContent = '🛍️';
         lastBig = '';
         return;
       }
-      var d = r.duration;
+      var inst = r.installment;
+      var d = inst ? inst.perDuration : r.duration;
       el.big.classList.remove('empty');
       setBig(el.big, d.parts);
-      el.tSticker.textContent = core.stickerFor(d.kind);
-      if (d.text !== lastBig) { pop(el.big); pop(el.tSticker); lastBig = d.text; }
-      var extra = [d.detail, d.monthsLine].filter(Boolean).join(' · ');
+      el.tSticker.textContent = inst ? '💳' : core.stickerFor(d.kind);
+      if (d.text + installment !== lastBig) { pop(el.big); pop(el.tSticker); lastBig = d.text + installment; }
+      var extra = inst
+        ? 'trong ' + inst.months + ' tháng · tổng ' + r.duration.text
+        : [d.detail, d.monthsLine].filter(Boolean).join(' · ');
       el.detail.textContent = extra;
       el.detail.hidden = !extra;
       el.sentence.textContent = r.sentence + ' ' + r.quip;
       el.sentence.classList.add('result-text');
+
+      el.equiv.textContent = '';
+      el.equiv.hidden = !r.equivalents.length;
+      if (r.equivalents.length) {
+        el.equiv.appendChild(document.createTextNode('Bằng ≈ ' + r.equivalents.map(function (e) {
+          return e.text + ' ' + e.emoji;
+        }).join(' hoặc ')));
+        var note = document.createElement('small');
+        note.textContent = 'giá ước chừng: ' + r.equivalents.map(function (e) { return e.priceNote; }).join(', ');
+        el.equiv.appendChild(note);
+      }
+    }
+
+    /* --- Giỏ hàng --- */
+    function renderCart(focusIndex, focusField) {
+      el.items.textContent = '';
+      cart.forEach(function (item, idx) {
+        var n = idx + 1;
+        var row = document.createElement('div');
+        row.className = 'row item-row';
+
+        var main = document.createElement('span');
+        main.className = 'row-main';
+        var name = document.createElement('input');
+        name.type = 'text';
+        name.className = 'item-name';
+        name.setAttribute('list', 'item-ideas');
+        name.maxLength = 60;
+        name.placeholder = cart.length > 1 ? 'Món ' + n : 'Tên món (tuỳ chọn)';
+        name.setAttribute('aria-label', 'Tên món ' + n);
+        name.enterKeyHint = 'next';
+        name.value = item.name;
+        var sub = document.createElement('span');
+        sub.className = 'row-sub';
+        main.appendChild(name);
+        main.appendChild(sub);
+
+        var wrap = document.createElement('span');
+        wrap.className = 'row-input money';
+        var price = document.createElement('input');
+        price.type = 'text';
+        price.className = 'item-price';
+        price.inputMode = 'text';
+        price.placeholder = '45k';
+        price.spellcheck = false;
+        price.setAttribute('autocapitalize', 'off');
+        price.setAttribute('aria-label', 'Giá món ' + n);
+        price.enterKeyHint = 'done';
+        price.value = item.price;
+        wrap.appendChild(price);
+
+        row.appendChild(main);
+        row.appendChild(wrap);
+        if (cart.length > 1) {
+          var remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'item-remove';
+          remove.textContent = '✕';
+          remove.setAttribute('aria-label', 'Bỏ món ' + n + ' khỏi giỏ');
+          remove.addEventListener('click', function () {
+            cart.splice(idx, 1);
+            renderCart();
+            updateAll(true);
+          });
+          row.appendChild(remove);
+        }
+
+        name.addEventListener('input', function () { item.name = name.value; updateAll(false); });
+        price.addEventListener('input', function () { item.price = price.value; updateAll(false); });
+        price.addEventListener('change', function () {
+          var f = state.fields.items[idx];
+          if (f && f.state === 'ok') { price.value = core.formatNumber(f.value); item.price = price.value; }
+          updateAll(true);
+        });
+        el.items.appendChild(row);
+      });
+      if (focusIndex !== undefined) {
+        var rows = el.items.querySelectorAll('.item-row');
+        var target = rows[focusIndex] && rows[focusIndex].querySelector(focusField === 'name' ? '.item-name' : '.item-price');
+        if (target) target.focus();
+      }
+    }
+
+    function renderItemSubs(showErrors) {
+      var rows = el.items.querySelectorAll('.item-row');
+      cart.forEach(function (item, idx) {
+        var row = rows[idx];
+        if (!row) return;
+        var f = state.fields.items[idx];
+        var sub = row.querySelector('.row-sub');
+        var price = row.querySelector('.item-price');
+        var error = f && f.state !== 'ok' && f.state !== 'empty' && f.message;
+        var text = '';
+        var cls = '';
+        if (error && showErrors) {
+          text = f.message;
+          cls = 'warn';
+        } else if (f && f.state === 'ok') {
+          var raw = item.price.trim().replace(/\s*(đ|vnđ|vnd)$/i, '');
+          if (raw !== core.formatNumber(f.value)) { text = '= ' + core.formatVND(f.value); cls = 'preview'; }
+        }
+        if (!(error && !showErrors && sub.classList.contains('warn'))) {
+          sub.textContent = text;
+          sub.className = 'row-sub' + (cls ? ' ' + cls : '');
+        }
+        price.setAttribute('aria-invalid', error && showErrors ? 'true' : 'false');
+      });
     }
 
     /* --- Tab "Lương thực nhận" --- */
@@ -969,8 +1238,8 @@
         salary: inputs.salary.value,
         days: inputs.days.value,
         hours: inputs.hours.value,
-        name: inputs.name.value,
-        price: inputs.price.value
+        items: cart,
+        installment: installment
       });
       renderTime(showErrors);
       renderGross(showErrors);
@@ -1160,10 +1429,41 @@
     el.chips.addEventListener('click', function (e) {
       var chip = e.target.closest('[data-name]');
       if (!chip) return;
-      inputs.name.value = chip.getAttribute('data-name');
-      inputs.price.value = ''; // không tự điền giá: giá thật tuỳ nơi, tuỳ lúc
+      // Điền vào dòng còn trống giá; hết dòng trống thì thêm món mới vào giỏ.
+      // Không tự điền giá: giá thật tuỳ nơi, tuỳ lúc.
+      var idx = -1;
+      for (var i = cart.length - 1; i >= 0; i--) {
+        if (!cart[i].price.trim()) { idx = i; break; }
+      }
+      if (idx === -1) {
+        cart.push({ name: '', price: '' });
+        idx = cart.length - 1;
+      }
+      cart[idx].name = chip.getAttribute('data-name');
+      cart[idx].price = '';
+      renderCart(idx, 'price');
       updateAll(true);
-      inputs.price.focus();
+    });
+
+    el.addItem.addEventListener('click', function () {
+      cart.push({ name: '', price: '' });
+      renderCart(cart.length - 1, 'name');
+      updateAll(true);
+    });
+
+    el.months.forEach(function (btn, i) {
+      function pick(target) {
+        installment = Number(target.getAttribute('data-months'));
+        updateAll(true);
+      }
+      btn.addEventListener('click', function () { pick(btn); });
+      btn.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        var next = el.months[(i + (e.key === 'ArrowRight' ? 1 : el.months.length - 1)) % el.months.length];
+        pick(next);
+        next.focus();
+      });
     });
 
     el.tabs.forEach(function (tab, i) {
@@ -1244,6 +1544,7 @@
       if (tab) showTab(tab);
     });
 
+    renderCart();
     var savedTab = load();
     var hashTab = tabFromHash();
     // Lần đầu: bắt đầu từ tính lương thực nhận. Đã có lương thực nhận thì vào thẳng quy giờ làm.
